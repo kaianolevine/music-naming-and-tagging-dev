@@ -1,11 +1,11 @@
 [tool.poetry]
-name = "project_name"
-version = "0.0.12"
+name = "music_naming_and_tagging"
+version = "0.0.1"
 description = "Starter template for Kaiano's Python projects with CI, pre-commit, coverage, and shared utils."
 authors = ["Kaiano Levine <kaiano@example.com>"]
 license = "MIT"
 readme = "README.md"
-packages = [{ include = "project_name", from = "src" }]
+packages = [{ include = "music_naming_and_tagging", from = "src" }]
 
 [tool.poetry.dependencies]
 python = ">=3.10,<4.0"
