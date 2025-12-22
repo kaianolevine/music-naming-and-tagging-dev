@@ -291,7 +291,7 @@ def main() -> None:
         config, "MUSIC_TAGGING_OUTPUT_FOLDER_ID", None
     )
     acoustid_api_key = os.environ.get("ACOUSTID_API_KEY") or getattr(
-        config, "ACOUSTID_API_KEY", None
+        config, "qjhrUALpPV", None
     )
 
     if not source_folder_id or not dest_folder_id or not acoustid_api_key:

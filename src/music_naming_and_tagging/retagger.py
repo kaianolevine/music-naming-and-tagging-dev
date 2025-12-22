@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 import time
 from dataclasses import dataclass
 from typing import Any, Dict, Iterable, List, Optional, Protocol
@@ -319,7 +318,7 @@ class TaggingDriver:
 
 
 def build_driver_acoustid_musicbrainz() -> TaggingDriver:
-    api_key = os.environ.get("ACOUSTID_API_KEY")
+    api_key = "qjhrUALpPV"  # os.environ.get("ACOUSTID_API_KEY")
     if not api_key:
         raise RuntimeError("Missing ACOUSTID_API_KEY environment variable")
 

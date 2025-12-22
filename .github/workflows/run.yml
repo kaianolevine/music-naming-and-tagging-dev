@@ -1,0 +1,45 @@
+name: Music Tag and Rename
+run-name: Music Tag and Rename (${{ github.event_name }})
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: retag-rename
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 340
+
+    env:
+      GOOGLE_CREDENTIALS_JSON: ${{ secrets.GOOGLE_CREDENTIALS_JSON }}
+      LOGGING_LEVEL: ${{ vars.LOGGING_LEVEL }}
+      ACOUSTID_API_KEY: ${{ secrets.ACOUSTID_API_KEY }}
+      MUSIC_UPLOAD_SOURCE_FOLDER_ID: ${{ vars.MUSIC_UPLOAD_SOURCE_FOLDER_ID }}
+      MUSIC_TAGGING_OUTPUT_FOLDER_ID: ${{ vars.MUSIC_TAGGING_OUTPUT_FOLDER_ID }}
+
+    steps:
+      - name: 🧩 Checkout repository
+        uses: actions/checkout@v4
+
+      - name: 🐍 Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: 🎧 Install system deps (chromaprint)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y chromaprint
+          fpcalc -version
+
+      - name: 📦 Install Poetry
+        run: pip install poetry
+
+      - name: 🧰 Install dependencies
+        run: poetry install --no-interaction
+
+      - name: 🏃 Run music retagger
+        run: poetry run python -m music_naming_and_tagging.drive_retagger
