@@ -52,6 +52,18 @@ def _normalize_for_compare(v: Any) -> str:
     return _safe_str(v).strip()
 
 
+def _safe_filename_component(v: Any) -> str:
+    """
+    Sanitize a value for use in filenames.
+    Removes path separators and trims whitespace.
+    """
+    s = _safe_str(v)
+    # Replace path separators and problematic characters
+    for ch in ["/", "\\", ":", "*", "?", '"', "<", ">", "|"]:
+        s = s.replace(ch, "_")
+    return s.strip()
+
+
 def _print_all_tags(path: str) -> None:
     try:
         f = music_tag.load_file(path)
@@ -251,10 +263,34 @@ def process_drive_folder_for_retagging(
             else:
                 log.info(f"[TAGGED] {name}: completed with no conflicts.")
 
+            # Rename file to Title_Artist.ext before upload
+            base, ext = os.path.splitext(name)
+            title_part = _safe_filename_component(updates.title)
+            artist_part = _safe_filename_component(updates.artist)
+
+            if title_part and artist_part:
+                new_name = f"{title_part}_{artist_part}{ext}"
+            else:
+                # Fallback to original name if we cannot safely build a new one
+                new_name = name
+
+            new_temp_path = os.path.join(
+                os.path.dirname(temp_path),
+                f"{file_id}_{new_name}",
+            )
+
+            if new_temp_path != temp_path:
+                try:
+                    os.rename(temp_path, new_temp_path)
+                    temp_path = new_temp_path
+                    log.info(f"[RENAME] Renamed file to {new_name}")
+                except Exception as e:
+                    log.error(f"[RENAME-ERROR] Failed to rename {name}: {e}")
+
             # Upload to destination
             drive.upload_file(service, temp_path, dest_folder_id)
             summary["uploaded"] += 1
-            log.info(f"[UPLOAD] {name} -> dest_folder_id={dest_folder_id}")
+            log.info(f"[UPLOAD] {new_name} -> dest_folder_id={dest_folder_id}")
 
         except Exception as e:
             summary["failed"] += 1
