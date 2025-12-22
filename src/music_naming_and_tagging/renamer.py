@@ -3,7 +3,6 @@ import re
 import tempfile
 from typing import Dict, List, Optional
 
-import kaiano_common_utils.config as config
 import kaiano_common_utils.google_drive as drive
 import kaiano_common_utils.logger as log
 from mutagen.easyid3 import EasyID3
@@ -248,11 +247,3 @@ def generate_filename(metadata: Dict[str, str], config: Dict) -> Optional[str]:
     filename = f"{separator.join(filename_parts)}{extension}"
     log.debug(f"Generated filename: {filename}")
     return filename
-
-
-if __name__ == "__main__":
-    process_drive_folder(
-        config.MUSIC_UPLOAD_SOURCE_FOLDER_ID,
-        config.MUSIC_TAGGING_OUTPUT_FOLDER_ID,
-        config.SEP_CHARACTERS,
-    )
