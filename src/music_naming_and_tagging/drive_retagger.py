@@ -165,7 +165,7 @@ def process_drive_folder_for_retagging(
     dest_folder_id: str,
     *,
     acoustid_api_key: str,
-    min_confidence: float = 0.50,
+    min_confidence: float = 0.30,
     max_candidates: int = 5,
 ) -> Dict[str, int]:
     """

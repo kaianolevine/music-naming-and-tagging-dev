@@ -1,10 +1,14 @@
 from __future__ import annotations
 
+import os
 import time
 from dataclasses import dataclass
 from typing import Any, Dict, Iterable, List, Optional, Protocol
 
 import acoustid
+
+# import kaiano_common_utils.config as config
+import kaiano_common_utils.logger as log
 import music_tag
 import musicbrainzngs
 
@@ -151,6 +155,20 @@ class AcoustIdIdentifier(Identifier):
             try:
                 # returns list of tuples: (score, recording_id, title, artist)
                 results = acoustid.match(self.api_key, path)
+                basename = os.path.basename(path)
+                log.info(
+                    f"[ACOUSTID-RAW] {basename}: match() returned {len(results)} rows"
+                )
+                for score, recording_id, title, artist in sorted(
+                    results, key=lambda r: r[0], reverse=True
+                )[:5]:
+                    log.info(
+                        f"[ACOUSTID-RAW] {basename}: score={float(score):.3f} mbid={recording_id!r} artist={artist!r} title={title!r}"
+                    )
+
+                if not results:
+                    return []
+
                 # Sort by score desc, keep only unique recording IDs
                 seen = set()
                 ranked: List[TrackId] = []
@@ -162,21 +180,23 @@ class AcoustIdIdentifier(Identifier):
                         continue
                     seen.add(recording_id)
 
-                    if score >= self.min_confidence:
-                        ranked.append(
-                            TrackId(
-                                provider="musicbrainz",
-                                id=recording_id,
-                                confidence=float(score),
-                            )
+                    ranked.append(
+                        TrackId(
+                            provider="musicbrainz",
+                            id=recording_id,
+                            confidence=float(score),
                         )
+                    )
 
                     if len(ranked) >= self.max_candidates:
                         break
 
                 return ranked
 
-            except Exception:
+            except Exception as e:
+                log.error(
+                    f"[ACOUSTID-ERROR] {os.path.basename(path)} attempt {attempt}/{self.retries}: {e!r}"
+                )
                 if attempt < self.retries:
                     time.sleep(self.retry_sleep_s * attempt)
                 else:
@@ -318,13 +338,14 @@ class TaggingDriver:
 
 
 def build_driver_acoustid_musicbrainz() -> TaggingDriver:
-    api_key = "qjhrUALpPV"  # os.environ.get("ACOUSTID_API_KEY")
+    # api_key = os.environ.get("ACOUSTID_API_KEY") or getattr(config, "ACOUSTID_API_KEY", None)
+    api_key = "qjhrUALpPV"
     if not api_key:
         raise RuntimeError("Missing ACOUSTID_API_KEY environment variable")
 
     tag_io = MusicTagIO()
     identifier = AcoustIdIdentifier(
-        api_key=api_key, min_confidence=0.70, max_candidates=5
+        api_key=api_key, min_confidence=0.30, max_candidates=5
     )
     meta_provider = MusicBrainzRecordingProvider(
         app_name="music-tagger",
