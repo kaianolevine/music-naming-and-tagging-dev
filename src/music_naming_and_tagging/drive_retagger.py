@@ -89,6 +89,18 @@ def _print_all_tags(path: str) -> None:
         log.info(f"  [TAG] {k} = {v}")
 
 
+def _log_candidate_options(
+    name: str, candidates: list[Any], *, max_show: int = 5
+) -> None:
+    if not candidates:
+        log.info(f"[CANDIDATES] {name}: none")
+        return
+
+    top = sorted(candidates, key=lambda c: c.confidence, reverse=True)[:max_show]
+    rendered = ", ".join(f"{c.provider}:{c.id}({c.confidence:.3f})" for c in top)
+    log.info(f"[CANDIDATES] {name}: {rendered}")
+
+
 def _build_updates_with_conflict_logging(
     existing: TagSnapshot, new_meta: TrackMetadata
 ) -> Tuple[TrackMetadata, bool]:
@@ -153,7 +165,7 @@ def process_drive_folder_for_retagging(
     dest_folder_id: str,
     *,
     acoustid_api_key: str,
-    min_confidence: float = 0.70,
+    min_confidence: float = 0.50,
     max_candidates: int = 5,
 ) -> Dict[str, int]:
     """
@@ -213,11 +225,21 @@ def process_drive_folder_for_retagging(
             # Identify
             snapshot = tag_io.read(temp_path)
             candidates = list(identifier.identify(temp_path, snapshot))
+            _log_candidate_options(name, candidates, max_show=max_candidates)
+
             if not candidates:
-                log.error(f"[IDENTIFY-FAIL] {name}: no match above {min_confidence}")
+                log.info(
+                    f"[IDENTIFY-SKIP] {name}: no candidates returned (continuing without tagging)"
+                )
                 continue
 
             chosen = max(candidates, key=lambda c: c.confidence)
+            if chosen.confidence < min_confidence:
+                log.info(
+                    f"[IDENTIFY-SKIP] {name}: best score {chosen.confidence:.3f} below threshold {min_confidence:.2f} (continuing without tagging)"
+                )
+                continue
+
             summary["identified"] += 1
             log.info(
                 f"[IDENTIFY] {name}: provider={chosen.provider} id={chosen.id} score={chosen.confidence:.3f}"
