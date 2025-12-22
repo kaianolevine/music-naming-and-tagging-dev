@@ -3,14 +3,14 @@ from __future__ import annotations
 import os
 import time
 from dataclasses import dataclass
-from typing import Iterable, Optional, Protocol, Dict, Any, List
+from typing import Any, Dict, Iterable, List, Optional, Protocol
 
 import acoustid
-import musicbrainzngs
 import music_tag
-
+import musicbrainzngs
 
 # ---------- Models / Interfaces ----------
+
 
 @dataclass(frozen=True)
 class TrackId:
@@ -60,12 +60,23 @@ class MetadataProvider(Protocol):
 
 # ---------- music-tag adapter ----------
 
+
 class MusicTagIO(TagReaderWriter):
     def read(self, path: str) -> TagSnapshot:
         f = music_tag.load_file(path)
         keys = [
-            "tracktitle", "artist", "album", "albumartist", "year", "genre",
-            "comment", "isrc", "tracknumber", "discnumber", "bpm", "artwork"
+            "tracktitle",
+            "artist",
+            "album",
+            "albumartist",
+            "year",
+            "genre",
+            "comment",
+            "isrc",
+            "tracknumber",
+            "discnumber",
+            "bpm",
+            "artwork",
         ]
         tags: dict[str, Any] = {}
         has_artwork = False
@@ -114,6 +125,7 @@ class MusicTagIO(TagReaderWriter):
 
 # ---------- AcoustID Identifier ----------
 
+
 class AcoustIdIdentifier(Identifier):
     """
     Uses Chromaprint fingerprinting via pyacoustid + AcoustID webservice
@@ -135,7 +147,6 @@ class AcoustIdIdentifier(Identifier):
         self.retry_sleep_s = retry_sleep_s
 
     def identify(self, path: str, existing: TagSnapshot) -> Iterable[TrackId]:
-        last_err: Optional[Exception] = None
 
         for attempt in range(1, self.retries + 1):
             try:
@@ -145,21 +156,28 @@ class AcoustIdIdentifier(Identifier):
                 seen = set()
                 ranked: List[TrackId] = []
 
-                for score, recording_id, _title, _artist in sorted(results, key=lambda r: r[0], reverse=True):
+                for score, recording_id, _title, _artist in sorted(
+                    results, key=lambda r: r[0], reverse=True
+                ):
                     if not recording_id or recording_id in seen:
                         continue
                     seen.add(recording_id)
 
                     if score >= self.min_confidence:
-                        ranked.append(TrackId(provider="musicbrainz", id=recording_id, confidence=float(score)))
+                        ranked.append(
+                            TrackId(
+                                provider="musicbrainz",
+                                id=recording_id,
+                                confidence=float(score),
+                            )
+                        )
 
                     if len(ranked) >= self.max_candidates:
                         break
 
                 return ranked
 
-            except Exception as e:
-                last_err = e
+            except Exception:
                 if attempt < self.retries:
                     time.sleep(self.retry_sleep_s * attempt)
                 else:
@@ -171,6 +189,7 @@ class AcoustIdIdentifier(Identifier):
 
 
 # ---------- MusicBrainz Provider ----------
+
 
 class MusicBrainzRecordingProvider(MetadataProvider):
     """
@@ -201,7 +220,9 @@ class MusicBrainzRecordingProvider(MetadataProvider):
 
     def fetch(self, track_id: TrackId) -> TrackMetadata:
         if track_id.provider != "musicbrainz":
-            raise ValueError(f"MusicBrainzRecordingProvider only supports provider='musicbrainz', got {track_id.provider}")
+            raise ValueError(
+                f"MusicBrainzRecordingProvider only supports provider='musicbrainz', got {track_id.provider}"
+            )
 
         last_err: Optional[Exception] = None
 
@@ -254,12 +275,15 @@ class MusicBrainzRecordingProvider(MetadataProvider):
                 if attempt < self.retries:
                     time.sleep(self.retry_sleep_s * attempt)
                 else:
-                    raise RuntimeError(f"MusicBrainz fetch failed for {track_id.id}: {last_err}") from last_err
+                    raise RuntimeError(
+                        f"MusicBrainz fetch failed for {track_id.id}: {last_err}"
+                    ) from last_err
 
         raise RuntimeError(f"MusicBrainz fetch failed for {track_id.id}: {last_err}")
 
 
 # ---------- Driver wiring (no artwork) ----------
+
 
 @dataclass
 class TaggingResult:
@@ -271,7 +295,12 @@ class TaggingResult:
 
 
 class TaggingDriver:
-    def __init__(self, tag_io: TagReaderWriter, identifier: Identifier, meta_provider: MetadataProvider):
+    def __init__(
+        self,
+        tag_io: TagReaderWriter,
+        identifier: Identifier,
+        meta_provider: MetadataProvider,
+    ):
         self.tag_io = tag_io
         self.identifier = identifier
         self.meta_provider = meta_provider
@@ -295,11 +324,15 @@ def build_driver_acoustid_musicbrainz() -> TaggingDriver:
         raise RuntimeError("Missing ACOUSTID_API_KEY environment variable")
 
     tag_io = MusicTagIO()
-    identifier = AcoustIdIdentifier(api_key=api_key, min_confidence=0.70, max_candidates=5)
+    identifier = AcoustIdIdentifier(
+        api_key=api_key, min_confidence=0.70, max_candidates=5
+    )
     meta_provider = MusicBrainzRecordingProvider(
         app_name="music-tagger",
         app_version="0.1.0",
         contact="https://example.com",
         throttle_s=1.0,
     )
-    return TaggingDriver(tag_io=tag_io, identifier=identifier, meta_provider=meta_provider)
+    return TaggingDriver(
+        tag_io=tag_io, identifier=identifier, meta_provider=meta_provider
+    )
