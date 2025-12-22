@@ -247,10 +247,20 @@ class AcoustIdIdentifier(Identifier):
                         try:
                             import json as _json
 
-                            parsed = _json.loads(data)
+                            # fpcalc should emit JSON, but some builds may prepend noise.
+                            json_text = data
+                            if "{" in json_text and "}" in json_text:
+                                json_text = json_text[
+                                    json_text.find("{") : json_text.rfind("}") + 1
+                                ]
+
+                            parsed = _json.loads(json_text)
                             duration = parsed.get("duration")
                             fingerprint = parsed.get("fingerprint")
-                        except Exception:
+                        except Exception as _json_e:
+                            log.error(
+                                f"[ACOUSTID-FALLBACK-PARSE-ERROR] {os.path.basename(path)}: {_json_e!r} sample={data[:120]!r}"
+                            )
                             duration = None
                             fingerprint = None
 
@@ -265,6 +275,11 @@ class AcoustIdIdentifier(Identifier):
                                 meta="recordings",
                             )
                             results = (lookup or {}).get("results") or []
+                            log.info(
+                                f"[ACOUSTID-FALLBACK] {os.path.basename(path)}: lookup returned {len(results)} result(s)"
+                            )
+                            if not results:
+                                return []
 
                             # Normalize into the same (score, recording_id, title, artist) tuple shape
                             normalized = []
