@@ -4,7 +4,7 @@ import os
 import tempfile
 from typing import Any, Dict, Optional, Tuple
 
-import kaiano_common_utils.config as config
+# import kaiano_common_utils.config as config
 import kaiano_common_utils.google_drive as drive
 import kaiano_common_utils.logger as log
 import music_tag
@@ -292,9 +292,10 @@ def main() -> None:
     # os.environ.get("MUSIC_TAGGING_OUTPUT_FOLDER_ID") or getattr(
     # config, "17LjjgX4bFwxR4NOnnT38Aflp8DSPpjOu", None
     # )
-    acoustid_api_key = os.environ.get("ACOUSTID_API_KEY") or getattr(
-        config, "qjhrUALpPV", None
-    )
+    acoustid_api_key = "qjhrUALpPV"
+    # os.environ.get("ACOUSTID_API_KEY") or getattr(
+    #    config, "qjhrUALpPV", None
+    # )
 
     if not source_folder_id or not dest_folder_id or not acoustid_api_key:
         raise RuntimeError(
