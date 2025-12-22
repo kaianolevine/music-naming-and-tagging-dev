@@ -35,3 +35,7 @@ source = ["project_name"]
 [tool.coverage.report]
 fail_under = 90
 show_missing = true
+
+[tool.isort]
+profile = "black"
+line_length = 88
