@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import binascii
 import os
+import subprocess
 import time
 from dataclasses import dataclass
 from typing import Any, Dict, Iterable, List, Optional, Protocol
@@ -207,8 +208,38 @@ class AcoustIdIdentifier(Identifier):
                 except Exception:
                     head_hex = "<unreadable>"
 
+                mime = "<unknown>"
+                try:
+                    p = subprocess.run(
+                        ["file", "-b", "--mime-type", path],
+                        capture_output=True,
+                        text=True,
+                        check=False,
+                    )
+                    out = (p.stdout or "").strip()
+                    if out:
+                        mime = out
+                except Exception:
+                    pass
+
+                fpcalc_tail = ""
+                try:
+                    p = subprocess.run(
+                        ["fpcalc", "-json", path],
+                        capture_output=True,
+                        text=True,
+                        check=False,
+                    )
+                    fpcalc_tail = (
+                        f"rc={p.returncode} "
+                        f"stdout={(p.stdout or '')[:200]!r} "
+                        f"stderr={(p.stderr or '')[:200]!r}"
+                    )
+                except Exception as _e:
+                    fpcalc_tail = f"fpcalc_error={_e!r}"
+
                 log.error(
-                    f"[ACOUSTID-DECODE-ERROR] {os.path.basename(path)}: {e!r} size_bytes={size_bytes} head32_hex={head_hex}"
+                    f"[ACOUSTID-DECODE-ERROR] {os.path.basename(path)}: {e!r} size_bytes={size_bytes} head32_hex={head_hex} mime={mime} {fpcalc_tail}"
                 )
                 # Retrying won't help if the audio can't be decoded.
                 return []
