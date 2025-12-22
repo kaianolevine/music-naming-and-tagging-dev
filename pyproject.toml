@@ -1,8 +1,8 @@
 [tool.poetry]
 name = "music_naming_and_tagging"
 version = "0.0.2"
-description = "Starter template for Kaiano's Python projects with CI, pre-commit, coverage, and shared utils."
-authors = ["Kaiano Levine <kaiano@example.com>"]
+description = "Pluggable drivers for identifying audio files and filling music metadata"
+authors = ["Kaiano Levine"]
 license = "MIT"
 readme = "README.md"
 packages = [{ include = "music_naming_and_tagging", from = "src" }]
@@ -10,6 +10,9 @@ packages = [{ include = "music_naming_and_tagging", from = "src" }]
 [tool.poetry.dependencies]
 python = ">=3.10,<4.0"
 kaiano-common-utils = { git = "https://github.com/kaianolevine/kaiano-common-utils.git", branch = "main" }
+music-tag = "^0.4.3"
+pyacoustid = "^1.2.2"
+musicbrainzngs = "^0.7.1"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.3.2"
@@ -19,6 +22,7 @@ flake8 = "^7.1.1"
 isort = "^5.13.2"
 mypy = "^1.11.2"
 pre-commit = "^3.8.0"
+
 
 [build-system]
 requires = ["poetry-core"]
