@@ -238,6 +238,77 @@ class AcoustIdIdentifier(Identifier):
                 except Exception as _e:
                     fpcalc_tail = f"fpcalc_error={_e!r}"
 
+                # If fpcalc works but pyacoustid raised a decode error, fall back to lookup()
+                try:
+                    if hasattr(p, "returncode") and p.returncode == 0 and p.stdout:
+                        data = p.stdout
+                        duration = None
+                        fingerprint = None
+                        try:
+                            import json as _json
+
+                            parsed = _json.loads(data)
+                            duration = parsed.get("duration")
+                            fingerprint = parsed.get("fingerprint")
+                        except Exception:
+                            duration = None
+                            fingerprint = None
+
+                        if duration and fingerprint:
+                            log.info(
+                                f"[ACOUSTID-FALLBACK] {os.path.basename(path)}: using fpcalc fingerprint for lookup (duration={duration})"
+                            )
+                            lookup = acoustid.lookup(
+                                self.api_key,
+                                fingerprint,
+                                float(duration),
+                                meta="recordings",
+                            )
+                            results = (lookup or {}).get("results") or []
+
+                            # Normalize into the same (score, recording_id, title, artist) tuple shape
+                            normalized = []
+                            for r in results:
+                                score = r.get("score") or 0.0
+                                recs = r.get("recordings") or []
+                                for rec in recs:
+                                    rid = rec.get("id")
+                                    title = rec.get("title")
+                                    artist = None
+                                    ac = rec.get("artists") or []
+                                    if ac and isinstance(ac, list):
+                                        artist = ac[0].get("name")
+                                    if rid:
+                                        normalized.append(
+                                            (float(score), rid, title, artist)
+                                        )
+
+                            # Build ranked unique candidates
+                            seen = set()
+                            ranked: List[TrackId] = []
+                            for score, recording_id, _title, _artist in sorted(
+                                normalized, key=lambda r: r[0], reverse=True
+                            ):
+                                if not recording_id or recording_id in seen:
+                                    continue
+                                seen.add(recording_id)
+                                ranked.append(
+                                    TrackId(
+                                        provider="musicbrainz",
+                                        id=recording_id,
+                                        confidence=float(score),
+                                    )
+                                )
+                                if len(ranked) >= self.max_candidates:
+                                    break
+
+                            if ranked:
+                                return ranked
+                except Exception as _fallback_e:
+                    log.error(
+                        f"[ACOUSTID-FALLBACK-ERROR] {os.path.basename(path)}: {_fallback_e!r}"
+                    )
+
                 log.error(
                     f"[ACOUSTID-DECODE-ERROR] {os.path.basename(path)}: {e!r} size_bytes={size_bytes} head32_hex={head_hex} mime={mime} {fpcalc_tail}"
                 )
