@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import os
 import tempfile
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Tuple
 
 # import kaiano_common_utils.config as config
 import kaiano_common_utils.google_drive as drive
@@ -112,59 +112,27 @@ def _build_updates_with_conflict_logging(
     existing: TagSnapshot, new_meta: TrackMetadata
 ) -> Tuple[TrackMetadata, bool]:
     """
+    Always overwrite existing tag values with new metadata when provided.
+
     Returns:
-      (updates, had_conflict)
-
-    Rule:
-      - If existing is empty -> allow write
-      - If existing equals new (after strip) -> allow write (idempotent)
-      - If existing differs and both non-empty -> log mismatch and SKIP that field
+      (updates, had_conflict=False)
     """
-    had_conflict = False
-
-    def allow(
-        field_key: str, existing_val: Any, new_val: Optional[str]
-    ) -> Optional[str]:
-        nonlocal had_conflict
-        if new_val is None:
-            return None
-        ex = _normalize_for_compare(existing_val)
-        nv = _normalize_for_compare(new_val)
-
-        if ex == "":
-            return new_val
-        if ex == nv:
-            return new_val
-
-        had_conflict = True
-        log.info(f"[MISMATCH] {field_key}: existing={ex!r} new={nv!r} -> SKIP field")
-        return None
-
-    # existing.tags uses music-tag keys where possible
-    ex_tags = existing.tags or {}
-
     updates = TrackMetadata(
-        title=allow("title", ex_tags.get("tracktitle"), new_meta.title),
-        artist=allow("artist", ex_tags.get("artist"), new_meta.artist),
-        album=allow("album", ex_tags.get("album"), new_meta.album),
-        album_artist=allow(
-            "album_artist", ex_tags.get("albumartist"), new_meta.album_artist
-        ),
-        year=allow("year", ex_tags.get("year"), new_meta.year),
-        genre=allow("genre", ex_tags.get("genre"), new_meta.genre),
-        bpm=allow("bpm", ex_tags.get("bpm"), new_meta.bpm),
-        comment=allow("comment", ex_tags.get("comment"), new_meta.comment),
-        isrc=allow("isrc", ex_tags.get("isrc"), new_meta.isrc),
-        track_number=allow(
-            "track_number", ex_tags.get("tracknumber"), new_meta.track_number
-        ),
-        disc_number=allow(
-            "disc_number", ex_tags.get("discnumber"), new_meta.disc_number
-        ),
+        title=new_meta.title,
+        artist=new_meta.artist,
+        album=new_meta.album,
+        album_artist=new_meta.album_artist,
+        year=new_meta.year,
+        genre=new_meta.genre,
+        bpm=new_meta.bpm,
+        comment=new_meta.comment,
+        isrc=new_meta.isrc,
+        track_number=new_meta.track_number,
+        disc_number=new_meta.disc_number,
         raw=new_meta.raw,
     )
 
-    return updates, had_conflict
+    return updates, False
 
 
 def process_drive_folder_for_retagging(
