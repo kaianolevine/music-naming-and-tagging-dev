@@ -500,7 +500,7 @@ class TaggingDriver:
 
 def build_driver_acoustid_musicbrainz() -> TaggingDriver:
     # api_key = os.environ.get("ACOUSTID_API_KEY") or getattr(config, "ACOUSTID_API_KEY", None)
-    api_key = "qjhrUALpPV"
+    api_key = "wPZFTKBR1d"
     if not api_key:
         raise RuntimeError("Missing ACOUSTID_API_KEY environment variable")
 
