@@ -34,14 +34,21 @@ TAG_FIELDS = [
 
 
 def _safe_str(v: Any) -> str:
+    """Best-effort stringify without turning missing values into the literal 'None'."""
+    if v is None:
+        return ""
     try:
-        return str(v)
+        s = str(v)
     except Exception:
         return ""
+    # Some tag wrappers stringify missing values as "None"
+    if s.strip().lower() == "none":
+        return ""
+    return s
 
 
 def _normalize_for_compare(v: Any) -> str:
-    # Keep simple for now: treat None/whitespace as empty; otherwise compare exact string.
+    """Canonical comparison: None / 'None' / whitespace all become empty string."""
     return _safe_str(v).strip()
 
 
