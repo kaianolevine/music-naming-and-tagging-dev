@@ -314,7 +314,7 @@ def main() -> None:
     # os.environ.get("MUSIC_TAGGING_OUTPUT_FOLDER_ID") or getattr(
     # config, "17LjjgX4bFwxR4NOnnT38Aflp8DSPpjOu", None
     # )
-    acoustid_api_key = "wPZFTKBR1d"
+    acoustid_api_key = "R1yQzNHear"
     # os.environ.get("ACOUSTID_API_KEY") or getattr(
     #    config, "qjhrUALpPV", None
     # )
