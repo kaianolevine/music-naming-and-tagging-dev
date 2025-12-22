@@ -506,7 +506,7 @@ def build_driver_acoustid_musicbrainz() -> TaggingDriver:
 
     tag_io = MusicTagIO()
     identifier = AcoustIdIdentifier(
-        api_key=api_key, min_confidence=0.30, max_candidates=5
+        api_key=api_key, min_confidence=0.70, max_candidates=5
     )
     meta_provider = MusicBrainzRecordingProvider(
         app_name="music-tagger",
