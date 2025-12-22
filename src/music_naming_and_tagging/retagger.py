@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import binascii
 import os
 import time
 from dataclasses import dataclass
@@ -192,6 +193,25 @@ class AcoustIdIdentifier(Identifier):
                         break
 
                 return ranked
+
+            except acoustid.FingerprintGenerationError as e:
+                try:
+                    size_bytes = os.path.getsize(path)
+                except Exception:
+                    size_bytes = -1
+
+                try:
+                    with open(path, "rb") as fh:
+                        head = fh.read(32)
+                    head_hex = binascii.hexlify(head).decode("ascii")
+                except Exception:
+                    head_hex = "<unreadable>"
+
+                log.error(
+                    f"[ACOUSTID-DECODE-ERROR] {os.path.basename(path)}: {e!r} size_bytes={size_bytes} head32_hex={head_hex}"
+                )
+                # Retrying won't help if the audio can't be decoded.
+                return []
 
             except Exception as e:
                 log.error(
