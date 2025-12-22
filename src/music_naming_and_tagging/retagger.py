@@ -268,17 +268,41 @@ class AcoustIdIdentifier(Identifier):
                             log.info(
                                 f"[ACOUSTID-FALLBACK] {os.path.basename(path)}: using fpcalc fingerprint for lookup (duration={duration})"
                             )
-                            lookup = acoustid.lookup(
-                                self.api_key,
-                                fingerprint,
-                                float(duration),
-                                meta="recordings",
-                            )
+                            try:
+                                lookup = acoustid.lookup(
+                                    self.api_key,
+                                    fingerprint,
+                                    float(duration),
+                                    meta="recordings",
+                                )
+                            except acoustid.WebServiceError as _ws_e:
+                                log.error(
+                                    f"[ACOUSTID-FALLBACK-WS-ERROR] {os.path.basename(path)}: {_ws_e!r}"
+                                )
+                                return []
+                            except Exception as _ws_e:
+                                log.error(
+                                    f"[ACOUSTID-FALLBACK-ERROR] {os.path.basename(path)}: {_ws_e!r}"
+                                )
+                                return []
+
                             results = (lookup or {}).get("results") or []
                             log.info(
                                 f"[ACOUSTID-FALLBACK] {os.path.basename(path)}: lookup returned {len(results)} result(s)"
                             )
                             if not results:
+                                # Surface server-side errors if present (common with HTTP 400)
+                                err = (lookup or {}).get("error") or (lookup or {}).get(
+                                    "message"
+                                )
+                                if err:
+                                    log.error(
+                                        f"[ACOUSTID-FALLBACK] {os.path.basename(path)}: lookup error={err!r}"
+                                    )
+                                else:
+                                    log.info(
+                                        f"[ACOUSTID-FALLBACK] {os.path.basename(path)}: lookup response keys={list((lookup or {}).keys())}"
+                                    )
                                 return []
 
                             # Normalize into the same (score, recording_id, title, artist) tuple shape
