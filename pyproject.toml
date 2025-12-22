@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "music_naming_and_tagging"
-version = "0.0.8"
+version = "0.0.9"
 description = "Pluggable drivers for identifying audio files and filling music metadata"
 authors = ["Kaiano Levine"]
 license = "MIT"
