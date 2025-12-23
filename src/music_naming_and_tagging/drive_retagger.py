@@ -26,6 +26,7 @@ TAG_FIELDS = [
     "album",
     "albumartist",
     "year",
+    "date",
     "genre",
     "bpm",
     "comment",

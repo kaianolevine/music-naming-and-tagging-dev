@@ -75,6 +75,7 @@ class MusicTagIO(TagReaderWriter):
             "album",
             "albumartist",
             "year",
+            "date",
             "genre",
             "comment",
             "isrc",
@@ -124,6 +125,19 @@ class MusicTagIO(TagReaderWriter):
                 continue
             # NOTE: overwrite/fill-only policy intentionally deferred.
             f[k] = str(v)
+
+        # Some players prefer "date" (ID3v2.4 TDRC) over "year" (ID3v2.3 TYER).
+        # Write both when possible for maximum compatibility.
+        if updates.year:
+            year_str = str(updates.year)
+            try:
+                f["year"] = year_str
+            except Exception:
+                pass
+            try:
+                f["date"] = year_str
+            except Exception:
+                pass
 
         f.save()
 
