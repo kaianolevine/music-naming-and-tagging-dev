@@ -140,7 +140,7 @@ class AcoustIdIdentifier(Identifier):
     def __init__(
         self,
         api_key: str,
-        min_confidence: float = 0.70,
+        min_confidence: float = 0.80,
         max_candidates: int = 5,
         retries: int = 3,
         retry_sleep_s: float = 1.5,
@@ -506,7 +506,7 @@ def build_driver_acoustid_musicbrainz() -> TaggingDriver:
 
     tag_io = MusicTagIO()
     identifier = AcoustIdIdentifier(
-        api_key=api_key, min_confidence=0.70, max_candidates=5
+        api_key=api_key, min_confidence=0.80, max_candidates=5
     )
     meta_provider = MusicBrainzRecordingProvider(
         app_name="music-tagger",

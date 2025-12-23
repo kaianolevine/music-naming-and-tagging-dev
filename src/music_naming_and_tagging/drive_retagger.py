@@ -149,18 +149,19 @@ def _build_updates_with_conflict_logging(
     existing: TagSnapshot, new_meta: TrackMetadata
 ) -> Tuple[TrackMetadata, bool]:
     """
-    Always overwrite existing tag values with new metadata when provided.
-
-    Returns:
-      (updates, had_conflict=False)
+    Overwrite existing tag values with new metadata when provided, except for genre (fill-only).
     """
+    existing_genre = _normalize_for_compare(existing.tags.get("genre"))
+    new_genre = _normalize_for_compare(new_meta.genre)
+    genre_to_write = new_meta.genre if (not existing_genre and new_genre) else None
+
     updates = TrackMetadata(
         title=new_meta.title,
         artist=new_meta.artist,
         album=new_meta.album,
         album_artist=new_meta.album_artist,
         year=new_meta.year,
-        genre=new_meta.genre,
+        genre=genre_to_write,
         bpm=new_meta.bpm,
         comment=new_meta.comment,
         isrc=new_meta.isrc,
@@ -177,7 +178,7 @@ def process_drive_folder_for_retagging(
     dest_folder_id: str,
     *,
     acoustid_api_key: str,
-    min_confidence: float = 0.70,
+    min_confidence: float = 0.80,
     max_candidates: int = 5,
 ) -> Dict[str, int]:
     """
