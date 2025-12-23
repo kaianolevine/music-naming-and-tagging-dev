@@ -155,6 +155,15 @@ def _build_updates_with_conflict_logging(
     new_genre = _normalize_for_compare(new_meta.genre)
     genre_to_write = new_meta.genre if (not existing_genre and new_genre) else None
 
+    existing_comment = _safe_str(existing.tags.get("comment")).strip()
+    if existing_comment == "":
+        comment_to_write = "<KAT_v1>"
+    elif existing_comment.startswith("<KAT_v1>"):
+        # Already tagged by this pipeline; keep as-is (avoid duplicate prefixes)
+        comment_to_write = existing_comment
+    else:
+        comment_to_write = "<KAT_v1> " + existing_comment
+
     updates = TrackMetadata(
         title=new_meta.title,
         artist=new_meta.artist,
@@ -163,7 +172,7 @@ def _build_updates_with_conflict_logging(
         year=new_meta.year,
         genre=genre_to_write,
         bpm=new_meta.bpm,
-        comment=new_meta.comment,
+        comment=comment_to_write,
         isrc=new_meta.isrc,
         track_number=new_meta.track_number,
         disc_number=new_meta.disc_number,
