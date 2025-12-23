@@ -405,6 +405,45 @@ class MusicBrainzRecordingProvider(MetadataProvider):
         self.retry_sleep_s = retry_sleep_s
         self._last_call_ts = 0.0
 
+    def _pick_genre_from_tag_list(self, tag_list: Any) -> Optional[str]:
+        """
+        Pick a best-effort 'genre' from a MusicBrainz tag-list.
+
+        MusicBrainz tags are community-driven and may include non-genre concepts.
+        We pick the highest-count tag after skipping some common non-genre tags.
+        """
+        if not tag_list or not isinstance(tag_list, list):
+            return None
+
+        skip = {
+            "seen live",
+            "favorites",
+            "favourites",
+            "favorite",
+            "owned",
+            "to buy",
+            "wishlist",
+        }
+
+        candidates: list[tuple[int, str]] = []
+        for t in tag_list:
+            try:
+                name = (t.get("name") or "").strip()
+                if not name:
+                    continue
+                if name.lower() in skip:
+                    continue
+                count = int(t.get("count") or 0)
+                candidates.append((count, name))
+            except Exception:
+                continue
+
+        if not candidates:
+            return None
+
+        candidates.sort(key=lambda x: x[0], reverse=True)
+        return candidates[0][1]
+
     def _throttle(self) -> None:
         now = time.time()
         elapsed = now - self._last_call_ts
@@ -425,7 +464,7 @@ class MusicBrainzRecordingProvider(MetadataProvider):
                 self._throttle()
                 rec = musicbrainzngs.get_recording_by_id(
                     track_id.id,
-                    includes=["artists", "releases", "isrcs"],
+                    includes=["artists", "releases", "isrcs", "tags"],
                 )
                 r = rec.get("recording", {})
 
@@ -434,11 +473,14 @@ class MusicBrainzRecordingProvider(MetadataProvider):
                 album = None
                 isrc = None
                 year = None
+                genre = None
 
                 # Artist
                 ac = r.get("artist-credit")
+                artist_id = None
                 if ac and isinstance(ac, list) and "artist" in ac[0]:
                     artist = ac[0]["artist"].get("name")
+                    artist_id = ac[0]["artist"].get("id")
 
                 # Release / Album (pick first release if present)
                 releases = r.get("release-list") or r.get("releases")
@@ -455,12 +497,31 @@ class MusicBrainzRecordingProvider(MetadataProvider):
                 if isrc_list and isinstance(isrc_list, list):
                     isrc = isrc_list[0]
 
+                # Genre from recording tags
+                tag_list = r.get("tag-list")
+                genre = self._pick_genre_from_tag_list(tag_list)
+
+                # Prefer genre from artist tags, if available
+                if artist_id:
+                    try:
+                        self._throttle()
+                        artist_resp = musicbrainzngs.get_artist_by_id(
+                            artist_id, includes=["tags"]
+                        )
+                        artist_tag_list = artist_resp.get("artist", {}).get("tag-list")
+                        artist_genre = self._pick_genre_from_tag_list(artist_tag_list)
+                        if artist_genre:
+                            genre = artist_genre
+                    except Exception:
+                        pass
+
                 return TrackMetadata(
                     title=title,
                     artist=artist,
                     album=album,
                     year=year,
                     isrc=isrc,
+                    genre=genre,
                     raw={"musicbrainz_recording": r},
                 )
 

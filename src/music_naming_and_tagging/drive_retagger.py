@@ -290,6 +290,7 @@ def process_drive_folder_for_retagging(
                         "artist": meta.artist,
                         "album": meta.album,
                         "year": meta.year,
+                        "genre": meta.genre,
                         "isrc": meta.isrc,
                     }.items()
                     if v
