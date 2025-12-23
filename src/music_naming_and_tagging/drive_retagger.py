@@ -54,6 +54,15 @@ def _normalize_for_compare(v: Any) -> str:
     return _safe_str(v).strip()
 
 
+def _normalize_year_for_tag(v: Any) -> str:
+    s = _safe_str(v).strip()
+    if not s:
+        return ""
+    if len(s) >= 4 and s[:4].isdigit():
+        return s[:4]
+    return ""
+
+
 def _safe_filename_component(v: Any) -> str:
     """
     Normalize a value for safe, deterministic filenames.
@@ -164,12 +173,14 @@ def _build_updates_with_conflict_logging(
     else:
         comment_to_write = "<KAT_v1> " + existing_comment
 
+    normalized_year = _normalize_year_for_tag(new_meta.year)
+
     updates = TrackMetadata(
         title=new_meta.title,
         artist=new_meta.artist,
         album=new_meta.album,
         album_artist=new_meta.album_artist,
-        year=new_meta.year,
+        year=normalized_year,
         genre=genre_to_write,
         bpm=new_meta.bpm,
         comment=comment_to_write,
@@ -290,6 +301,8 @@ def process_drive_folder_for_retagging(
             # If everything conflicts / nothing to write, we still consider run successful and upload unchanged file.
             # Tagging is only counted if we wrote without raising.
             tag_io.write(temp_path, updates)
+            log.info("[POST-WRITE TAGS]")
+            _print_all_tags(temp_path)
             summary["tagged"] += 1
             if had_conflict:
                 log.info(
