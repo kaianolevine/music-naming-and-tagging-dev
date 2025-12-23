@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import os
+import re
 import tempfile
+import unicodedata
 from typing import Any, Dict, Tuple
 
 # import kaiano_common_utils.config as config
@@ -54,14 +56,37 @@ def _normalize_for_compare(v: Any) -> str:
 
 def _safe_filename_component(v: Any) -> str:
     """
-    Sanitize a value for use in filenames.
-    Removes path separators and trims whitespace.
+    Normalize a value for safe, deterministic filenames.
+
+    Rules:
+    - Convert to string
+    - Strip accents / diacritics
+    - Lowercase
+    - Remove all whitespace
+    - Remove all non-alphanumeric characters (except underscore)
+    - Collapse multiple underscores
     """
     s = _safe_str(v)
-    # Replace path separators and problematic characters
-    for ch in ["/", "\\", ":", "*", "?", '"', "<", ">", "|"]:
-        s = s.replace(ch, "_")
-    return s.strip()
+
+    if not s:
+        return ""
+
+    # Normalize unicode (e.g. Beyoncé -> Beyonce)
+    s = unicodedata.normalize("NFKD", s)
+    s = "".join(c for c in s if not unicodedata.combining(c))
+
+    s = s.lower()
+
+    # Remove whitespace entirely
+    s = re.sub(r"\s+", "", s)
+
+    # Replace any remaining invalid chars with underscore
+    s = re.sub(r"[^a-z0-9_]", "_", s)
+
+    # Collapse multiple underscores
+    s = re.sub(r"_+", "_", s)
+
+    return s.strip("_")
 
 
 def _print_all_tags(path: str) -> None:
@@ -288,7 +313,7 @@ def process_drive_folder_for_retagging(
                     log.error(f"[RENAME-ERROR] Failed to rename {name}: {e}")
 
             # Upload to destination
-            drive.upload_file(service, temp_path, dest_folder_id)
+            drive.upload_file(service, temp_path, dest_folder_id, new_name)
             summary["uploaded"] += 1
             log.info(f"[UPLOAD] {new_name} -> dest_folder_id={dest_folder_id}")
 
