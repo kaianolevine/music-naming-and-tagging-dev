@@ -226,7 +226,7 @@ def process_drive_folder_for_retagging(
     acoustid_api_key: str,
     min_confidence: float = 0.90,
     max_candidates: int = 5,
-    max_songs_per_run: int = 20,
+    max_songs_per_run: int = 50,
 ) -> Dict[str, int]:
     """
     Orchestrates:
@@ -426,9 +426,9 @@ def main() -> None:
         )
 
     try:
-        max_songs_per_run = int(os.environ.get("MAX_SONGS_PER_RUN", "20"))
+        max_songs_per_run = int(os.environ.get("MAX_SONGS_PER_RUN", "50"))
     except Exception:
-        max_songs_per_run = 20
+        max_songs_per_run = 50
 
     process_drive_folder_for_retagging(
         source_folder_id,
