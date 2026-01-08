@@ -208,7 +208,9 @@ def _build_updates_with_conflict_logging(
         album=new_meta.album,
         album_artist=new_meta.album_artist,
         year=normalized_year,
-        genre=_title_case_words(genre_to_write),
+        # Genre is fill-only. If we are not writing genre, keep it as None so we do not
+        # overwrite an existing genre tag with an empty string.
+        genre=_title_case_words(genre_to_write) if genre_to_write is not None else None,
         bpm=new_meta.bpm,
         comment=comment_to_write,
         isrc=new_meta.isrc,
