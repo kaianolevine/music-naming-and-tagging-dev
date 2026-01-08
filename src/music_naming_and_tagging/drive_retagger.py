@@ -116,6 +116,14 @@ def _safe_filename_component(v: Any) -> str:
     return s.strip("_")
 
 
+def _delete_drive_file(service: Any, file_id: str) -> None:
+    """
+    Permanently delete a file from Google Drive.
+    Only call this after a successful end-to-end process.
+    """
+    service.files().delete(fileId=file_id, supportsAllDrives=True).execute()
+
+
 def _print_all_tags(path: str) -> None:
     try:
         f = music_tag.load_file(path)
@@ -216,8 +224,9 @@ def process_drive_folder_for_retagging(
     dest_folder_id: str,
     *,
     acoustid_api_key: str,
-    min_confidence: float = 0.80,
+    min_confidence: float = 0.90,
     max_candidates: int = 5,
+    max_songs_per_run: int = 20,
 ) -> Dict[str, int]:
     """
     Orchestrates:
@@ -254,10 +263,15 @@ def process_drive_folder_for_retagging(
         "tagged": 0,
         "uploaded": 0,
         "failed": 0,
+        "deleted": 0,
     }
 
     music_files = drive.list_music_files(service, source_folder_id)
-    log.info(f"[START] Found {len(music_files)} music files in source folder.")
+    if max_songs_per_run and max_songs_per_run > 0:
+        music_files = music_files[:max_songs_per_run]
+    log.info(
+        f"[START] Found {len(music_files)} music files in source folder (max per run={max_songs_per_run})."
+    )
 
     for file in music_files:
         summary["scanned"] += 1
@@ -360,6 +374,10 @@ def process_drive_folder_for_retagging(
             summary["uploaded"] += 1
             log.info(f"[UPLOAD] {new_name} -> dest_folder_id={dest_folder_id}")
 
+            _delete_drive_file(service, file_id)
+            summary["deleted"] += 1
+            log.info(f"[DELETE] Deleted source file_id={file_id} ({name})")
+
         except Exception as e:
             summary["failed"] += 1
             log.error(f"[ERROR] {name} ({file_id}): {e}")
@@ -407,10 +425,16 @@ def main() -> None:
             "MUSIC_TAGGING_OUTPUT_FOLDER_ID, ACOUSTID_API_KEY (or define them in kaiano_common_utils.config)."
         )
 
+    try:
+        max_songs_per_run = int(os.environ.get("MAX_SONGS_PER_RUN", "20"))
+    except Exception:
+        max_songs_per_run = 20
+
     process_drive_folder_for_retagging(
         source_folder_id,
         dest_folder_id,
         acoustid_api_key=acoustid_api_key,
+        max_songs_per_run=max_songs_per_run,
     )
 
 
