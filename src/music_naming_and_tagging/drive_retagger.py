@@ -367,11 +367,14 @@ def main() -> None:
       - ACOUSTID_API_KEY
     """
 
-    source_folder_id = "1Iu5TwzOXVqCDef2X8S5TZcFo1NdSHpRU"
+    # source_folder_id = "1Iu5TwzOXVqCDef2X8S5TZcFo1NdSHpRU"
+    source_folder_id = "1hDFTDOavXDtJN-MR-ruqqapMaXGp4mB6"
     # os.environ.get("MUSIC_UPLOAD_SOURCE_FOLDER_ID") or getattr(
     #    config, "1Iu5TwzOXVqCDef2X8S5TZcFo1NdSHpRU", None
     # )
-    dest_folder_id = "17LjjgX4bFwxR4NOnnT38Aflp8DSPpjOu"
+
+    # dest_folder_id = "17LjjgX4bFwxR4NOnnT38Aflp8DSPpjOu"
+    dest_folder_id = "1fL4Q4S1WUefC1QhHIsLuj3_DU1ZZBm_4"
     # os.environ.get("MUSIC_TAGGING_OUTPUT_FOLDER_ID") or getattr(
     # config, "17LjjgX4bFwxR4NOnnT38Aflp8DSPpjOu", None
     # )
