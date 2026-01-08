@@ -226,7 +226,7 @@ def process_drive_folder_for_retagging(
     acoustid_api_key: str,
     min_confidence: float = 0.90,
     max_candidates: int = 5,
-    max_songs_per_run: int = 50,
+    max_uploads_per_run: int = 20,
 ) -> Dict[str, int]:
     """
     Orchestrates:
@@ -267,13 +267,21 @@ def process_drive_folder_for_retagging(
     }
 
     music_files = drive.list_music_files(service, source_folder_id)
-    if max_songs_per_run and max_songs_per_run > 0:
-        music_files = music_files[:max_songs_per_run]
     log.info(
-        f"[START] Found {len(music_files)} music files in source folder (max per run={max_songs_per_run})."
+        f"[START] Found {len(music_files)} music files in source folder (max uploads per run={max_uploads_per_run})."
     )
 
     for file in music_files:
+        if (
+            max_uploads_per_run
+            and max_uploads_per_run > 0
+            and summary["uploaded"] >= max_uploads_per_run
+        ):
+            log.info(
+                f"[STOP] Reached max uploads per run ({max_uploads_per_run}). Stopping."
+            )
+            break
+
         summary["scanned"] += 1
         file_id = file.get("id")
         name = file.get("name", "unknown")
@@ -426,15 +434,15 @@ def main() -> None:
         )
 
     try:
-        max_songs_per_run = int(os.environ.get("MAX_SONGS_PER_RUN", "50"))
+        max_uploads_per_run = int(os.environ.get("MAX_UPLOADS_PER_RUN", "20"))
     except Exception:
-        max_songs_per_run = 50
+        max_uploads_per_run = 20
 
     process_drive_folder_for_retagging(
         source_folder_id,
         dest_folder_id,
         acoustid_api_key=acoustid_api_key,
-        max_songs_per_run=max_songs_per_run,
+        max_uploads_per_run=max_uploads_per_run,
     )
 
 
