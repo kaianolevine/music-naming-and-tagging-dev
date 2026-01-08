@@ -10,6 +10,7 @@ from typing import Any, Dict, Tuple
 import kaiano_common_utils.google_drive as drive
 import kaiano_common_utils.logger as log
 import music_tag
+from mutagen.id3 import ID3, TDRC, TYER, ID3NoHeaderError
 
 from music_naming_and_tagging.retagger import (
     AcoustIdIdentifier,
@@ -343,6 +344,34 @@ def process_drive_folder_for_retagging(
             # If everything conflicts / nothing to write, we still consider run successful and upload unchanged file.
             # Tagging is only counted if we wrote without raising.
             tag_io.write(temp_path, updates)
+
+            # VirtualDJ has historically been more reliable reading ID3v2.3 TYER.
+            # `music_tag` may write ID3v2.4 (TDRC/date). Here we best-effort ensure a
+            # TYER frame exists and re-save as ID3v2.3 for compatibility.
+            normalized_year = _normalize_year_for_tag(updates.year)
+            if normalized_year:
+                try:
+                    try:
+                        id3 = ID3(temp_path)
+                    except ID3NoHeaderError:
+                        id3 = ID3()
+
+                    # Ensure both frames exist; VirtualDJ often uses TYER.
+                    try:
+                        id3.setall("TYER", [TYER(encoding=3, text=normalized_year)])
+                    except Exception:
+                        pass
+                    try:
+                        id3.setall("TDRC", [TDRC(encoding=3, text=normalized_year)])
+                    except Exception:
+                        pass
+
+                    # Save as ID3v2.3 for maximum player compatibility
+                    id3.save(temp_path, v2_version=3)
+                except Exception:
+                    # Best-effort only; do not fail the tagging pipeline if this step fails.
+                    pass
+
             log.info("[NEW-TAGS]------------------")
             _print_all_tags(temp_path)
             summary["tagged"] += 1
