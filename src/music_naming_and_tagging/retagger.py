@@ -103,15 +103,45 @@ class MusicTagIO(TagReaderWriter):
 
         return TagSnapshot(tags=tags, has_artwork=has_artwork)
 
+    def _normalize_year(self, value: Optional[str]) -> Optional[str]:
+        """Normalize a year/date value to a 4-digit year string.
+
+        VirtualDJ primarily displays the Year column from ID3 date/year frames.
+        We keep this conservative: if we can't confidently extract a 4-digit year,
+        we return None and do not write.
+        """
+        if value is None:
+            return None
+        s = str(value).strip()
+        if not s:
+            return None
+
+        # Accept YYYY or YYYY-... or YYYY/... or any string that starts with a 4-digit year.
+        if len(s) >= 4 and s[:4].isdigit():
+            return s[:4]
+
+        # Fallback: find the first 4-digit run (very defensive)
+        digits = ""
+        for ch in s:
+            if ch.isdigit():
+                digits += ch
+                if len(digits) == 4:
+                    return digits
+            else:
+                digits = ""
+
+        return None
+
     def write(self, path: str, updates: TrackMetadata) -> None:
         f = music_tag.load_file(path)
+        normalized_year = self._normalize_year(updates.year)
 
         mapping = {
             "tracktitle": updates.title,
             "artist": updates.artist,
             "album": updates.album,
             "albumartist": updates.album_artist,
-            "year": updates.year,
+            "year": normalized_year,
             "genre": updates.genre,
             "comment": updates.comment,
             "isrc": updates.isrc,
@@ -126,16 +156,28 @@ class MusicTagIO(TagReaderWriter):
             # NOTE: overwrite/fill-only policy intentionally deferred.
             f[k] = str(v)
 
-        # Some players prefer "date" (ID3v2.4 TDRC) over "year" (ID3v2.3 TYER).
-        # Write both when possible for maximum compatibility.
-        if updates.year:
-            year_str = str(updates.year)
+        # VirtualDJ / DJ software compatibility:
+        # - ID3v2.3 often uses TYER ("year")
+        # - ID3v2.4 often uses TDRC ("date")
+        # Write both when we have a clean 4-digit year.
+        if normalized_year:
             try:
-                f["year"] = year_str
+                f["year"] = normalized_year
             except Exception:
                 pass
             try:
-                f["date"] = year_str
+                f["date"] = normalized_year
+            except Exception:
+                pass
+
+            # Some taggers/players also look at "originalyear" / "originaldate".
+            # Best-effort only; ignore if unsupported by the underlying format.
+            try:
+                f["originalyear"] = normalized_year
+            except Exception:
+                pass
+            try:
+                f["originaldate"] = normalized_year
             except Exception:
                 pass
 
