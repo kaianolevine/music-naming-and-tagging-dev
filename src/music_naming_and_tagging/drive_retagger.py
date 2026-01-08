@@ -50,6 +50,23 @@ def _safe_str(v: Any) -> str:
     return s
 
 
+def _title_case_words(v: Any) -> str:
+    """
+    Capitalize every word that starts with a letter.
+    Preserves existing punctuation and spacing.
+    """
+    s = _safe_str(v)
+    if not s:
+        return ""
+
+    def repl(match: re.Match) -> str:
+        word = match.group(0)
+        return word[0].upper() + word[1:]
+
+    # Capitalize words that start with an alphabetic character
+    return re.sub(r"\b[a-zA-Z][^\s]*", repl, s)
+
+
 def _normalize_for_compare(v: Any) -> str:
     """Canonical comparison: None / 'None' / whitespace all become empty string."""
     return _safe_str(v).strip()
@@ -177,8 +194,8 @@ def _build_updates_with_conflict_logging(
     normalized_year = _normalize_year_for_tag(new_meta.year)
 
     updates = TrackMetadata(
-        title=new_meta.title,
-        artist=new_meta.artist,
+        title=_title_case_words(new_meta.title),
+        artist=_title_case_words(new_meta.artist),
         album=new_meta.album,
         album_artist=new_meta.album_artist,
         year=normalized_year,
@@ -254,6 +271,7 @@ def process_drive_folder_for_retagging(
             summary["downloaded"] += 1
 
             # Print existing tags
+            log.info("[PRE-EXISTING-TAGS]------------------")
             _print_all_tags(temp_path)
 
             # Identify
@@ -303,7 +321,7 @@ def process_drive_folder_for_retagging(
             # If everything conflicts / nothing to write, we still consider run successful and upload unchanged file.
             # Tagging is only counted if we wrote without raising.
             tag_io.write(temp_path, updates)
-            log.info("[POST-WRITE TAGS]")
+            log.info("[NEW-TAGS]------------------")
             _print_all_tags(temp_path)
             summary["tagged"] += 1
             if had_conflict:
