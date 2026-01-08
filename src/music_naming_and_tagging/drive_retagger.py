@@ -199,7 +199,7 @@ def _build_updates_with_conflict_logging(
         album=new_meta.album,
         album_artist=new_meta.album_artist,
         year=normalized_year,
-        genre=genre_to_write,
+        genre=_title_case_words(genre_to_write),
         bpm=new_meta.bpm,
         comment=comment_to_write,
         isrc=new_meta.isrc,
