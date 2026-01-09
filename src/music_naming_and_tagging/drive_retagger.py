@@ -8,7 +8,7 @@ from typing import Any, Dict, Tuple
 
 import kaiano_common_utils.api.google.drive as drive
 import kaiano_common_utils.logger as log
-from kaiano_common_utils.api.music_tag.renamer import rename_music_file
+from kaiano_common_utils.api.music_tag.rename import rename_music_file
 from kaiano_common_utils.api.music_tag.retagger_api import (
     AcoustIdIdentifier,
     MusicBrainzRecordingProvider,
