@@ -2,8 +2,7 @@ import os
 
 import mutagen
 import pytest
-
-from music_naming_and_tagging import renamer
+from kaiano_common_utils import renamer
 
 # =====================================================
 # Helpers
