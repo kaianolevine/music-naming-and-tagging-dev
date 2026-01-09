@@ -8,7 +8,6 @@ from typing import Any, Dict, Tuple
 
 import kaiano_common_utils.api.google.drive as drive
 import kaiano_common_utils.logger as log
-from kaiano_common_utils.api.music_tag.rename import rename_music_file
 from kaiano_common_utils.api.music_tag.retagger_api import (
     AcoustIdIdentifier,
     MusicBrainzRecordingProvider,
@@ -18,6 +17,7 @@ from kaiano_common_utils.api.music_tag.retagger_music_tag import (
     get_metadata,
 )
 from kaiano_common_utils.api.music_tag.retagger_types import TagSnapshot, TrackMetadata
+from kaiano_common_utils.mp3_rename import rename_music_file
 
 
 def _safe_str(v: Any) -> str:
