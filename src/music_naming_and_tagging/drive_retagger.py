@@ -8,6 +8,7 @@ from typing import Any, Dict, Tuple
 
 import kaiano_common_utils.api.google.drive as drive
 import kaiano_common_utils.logger as log
+from kaiano_common_utils.api.music_tag.renamer import rename_music_file
 from kaiano_common_utils.api.music_tag.retagger_api import (
     AcoustIdIdentifier,
     MusicBrainzRecordingProvider,
@@ -436,4 +437,44 @@ def process_drive_folder_for_retagging(
                 pass
 
     log.info(f"[DONE] Summary: {summary}")
+    return summary
+
+
+def process_drive_folder(source_folder_id, dest_folder_id, separator) -> Dict[str, int]:
+    """
+    Download files from Drive, rename locally, and upload back to Drive.
+
+    Returns a summary dict: {"downloaded": int, "renamed": int, "uploaded": int, "failed": int}
+    """
+    log.info(
+        f"Processing Drive folder with parameters: source_folder_id={source_folder_id}, dest_folder_id={dest_folder_id}, separator='{separator}'"
+    )
+
+    service = drive.get_drive_service()
+
+    summary = {"downloaded": 0, "renamed": 0, "uploaded": 0, "failed": 0}
+
+    music_files = drive.list_music_files(service, source_folder_id)
+    for file in music_files:
+        try:
+            temp_path = os.path.join(tempfile.gettempdir(), file["name"])
+            drive.download_file(service, file["id"], temp_path)
+            summary["downloaded"] += 1
+            log.debug(f"Downloaded: {file['name']} to {temp_path}")
+
+            renamed_path = rename_music_file(
+                temp_path, tempfile.gettempdir(), separator
+            )
+            summary["renamed"] += 1
+            log.debug(f"Renamed to: {os.path.basename(renamed_path)}")
+
+            drive.upload_file(service, renamed_path, dest_folder_id)
+            summary["uploaded"] += 1
+            log.debug(f"Uploaded: {os.path.basename(renamed_path)}")
+        except Exception:
+            log.error(
+                f"Failed processing Drive file: {file.get('name')}", exc_info=True
+            )
+            summary["failed"] += 1
+    log.info(f"Drive process summary: {summary}")
     return summary
