@@ -42,4 +42,4 @@ jobs:
         run: poetry install --no-interaction
 
       - name: 🏃 Run music retagger
-        run: poetry run python -m music_naming_and_tagging.drive_retagger
+        run: poetry run python -m music_naming_and_tagging.main
