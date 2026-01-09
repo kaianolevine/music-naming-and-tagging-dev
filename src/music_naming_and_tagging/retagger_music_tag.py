@@ -2,7 +2,12 @@ from __future__ import annotations
 
 import kaiano_common_utils.logger as log
 import music_tag
-from retagger_types import TagReaderWriter, TagSnapshot, TrackMetadata
+
+from music_naming_and_tagging.retagger_types import (
+    TagReaderWriter,
+    TagSnapshot,
+    TrackMetadata,
+)
 
 # ---------- music-tag adapter ----------
 

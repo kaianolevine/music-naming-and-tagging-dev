@@ -9,7 +9,13 @@ from typing import Any, Iterable, List, Optional
 import acoustid
 import kaiano_common_utils.logger as log
 import musicbrainzngs
-from retagger_types import Identifier, TagSnapshot, TrackId, TrackMetadata
+
+from music_naming_and_tagging.retagger_types import (
+    Identifier,
+    TagSnapshot,
+    TrackId,
+    TrackMetadata,
+)
 
 # NOTE: This file contains only the "API interface" pieces:
 # - AcoustID identification
