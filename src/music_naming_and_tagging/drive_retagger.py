@@ -6,14 +6,14 @@ import tempfile
 import unicodedata
 from typing import Any, Dict, Tuple
 
-import kaiano_common_utils.google_drive as drive
+import kaiano_common_utils.api.google.drive as drive
 import kaiano_common_utils.logger as log
-from kaiano_common_utils.retagger_api import (
+from kaiano_common_utils.api.music_tag.retagger_api import (
     AcoustIdIdentifier,
     MusicBrainzRecordingProvider,
 )
-from kaiano_common_utils.retagger_music_tag import MusicTagIO
-from kaiano_common_utils.retagger_types import TagSnapshot, TrackMetadata
+from kaiano_common_utils.api.music_tag.retagger_music_tag import MusicTagIO
+from kaiano_common_utils.api.music_tag.retagger_types import TagSnapshot, TrackMetadata
 
 
 def _safe_str(v: Any) -> str:
