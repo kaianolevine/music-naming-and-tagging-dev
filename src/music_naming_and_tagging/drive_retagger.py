@@ -222,6 +222,46 @@ def _build_updates_with_conflict_logging(
     return updates, False
 
 
+def _build_passthrough_updates_from_snapshot(snapshot: TagSnapshot) -> TrackMetadata:
+    """Build updates from tags we already read, to re-write them in a VDJ-friendly way.
+
+    Purpose: sometimes files have tags that `music_tag` can read (and we can log), but
+    VirtualDJ doesn't show them reliably (often due to ID3 version/encoding quirks).
+
+    This function constructs a TrackMetadata using the currently-read tags and lets
+    `MusicTagIO.write()` normalize/write them back out. We keep this conservative and
+    do not invent missing values.
+    """
+    t = snapshot.tags
+
+    title = _safe_str(t.get("tracktitle")).strip()
+    artist = _safe_str(t.get("artist")).strip()
+    album = _safe_str(t.get("album")).strip()
+    album_artist = _safe_str(t.get("albumartist")).strip()
+    genre = _safe_str(t.get("genre")).strip()
+    bpm = _safe_str(t.get("bpm")).strip()
+    comment = _safe_str(t.get("comment")).strip()
+    year = _normalize_year_for_tag(t.get("year") or t.get("date"))
+
+    track_number = _safe_str(t.get("tracknumber")).strip()
+    disc_number = _safe_str(t.get("discnumber")).strip()
+
+    return TrackMetadata(
+        title=title if title else None,
+        artist=artist if artist else None,
+        album=album if album else None,
+        album_artist=album_artist if album_artist else None,
+        year=year if year else None,
+        genre=genre if genre else None,
+        bpm=bpm if bpm else None,
+        comment=comment if comment else None,
+        isrc=None,
+        track_number=track_number if track_number else None,
+        disc_number=disc_number if disc_number else None,
+        raw=snapshot.raw,
+    )
+
+
 def process_drive_folder_for_retagging(
     source_folder_id: str,
     dest_folder_id: str,
@@ -306,15 +346,69 @@ def process_drive_folder_for_retagging(
 
             if not candidates:
                 log.info(
-                    f"[IDENTIFY-SKIP] {name}: no candidates returned (continuing without tagging)"
+                    f"[IDENTIFY-SKIP] {name}: no candidates returned (re-writing existing tags + re-uploading to source for VirtualDJ compatibility)"
                 )
+
+                # Even if we can't identify the track, re-write the tags we can already read.
+                # This frequently fixes VirtualDJ showing only title.
+                passthrough_updates = _build_passthrough_updates_from_snapshot(snapshot)
+                tag_io.write(temp_path, passthrough_updates)
+
+                # Re-save ID3 as v2.3 for maximum VirtualDJ compatibility (not just year).
+                try:
+                    try:
+                        id3 = ID3(temp_path)
+                    except ID3NoHeaderError:
+                        id3 = ID3()
+                    id3.save(temp_path, v2_version=3)
+                except Exception:
+                    pass
+
+                # Upload back to the SAME source folder, replacing the original file.
+                drive.upload_file(service, temp_path, source_folder_id, name)
+                summary["uploaded"] += 1
+                log.info(
+                    f"[UPLOAD-SOURCE] {name} -> source_folder_id={source_folder_id}"
+                )
+
+                _delete_drive_file(service, file_id)
+                summary["deleted"] += 1
+                log.info(f"[DELETE] Deleted source file_id={file_id} ({name})")
+
+                # Count as tagged because we performed a tag write.
+                summary["tagged"] += 1
                 continue
 
             chosen = max(candidates, key=lambda c: c.confidence)
             if chosen.confidence < min_confidence:
                 log.info(
-                    f"[IDENTIFY-SKIP] {name}: best score {chosen.confidence:.3f} below threshold {min_confidence:.2f} (continuing without tagging)"
+                    f"[IDENTIFY-SKIP] {name}: best score {chosen.confidence:.3f} below threshold {min_confidence:.2f} (re-writing existing tags + re-uploading to source for VirtualDJ compatibility)"
                 )
+
+                passthrough_updates = _build_passthrough_updates_from_snapshot(snapshot)
+                tag_io.write(temp_path, passthrough_updates)
+
+                # Re-save ID3 as v2.3 for maximum VirtualDJ compatibility (not just year).
+                try:
+                    try:
+                        id3 = ID3(temp_path)
+                    except ID3NoHeaderError:
+                        id3 = ID3()
+                    id3.save(temp_path, v2_version=3)
+                except Exception:
+                    pass
+
+                drive.upload_file(service, temp_path, source_folder_id, name)
+                summary["uploaded"] += 1
+                log.info(
+                    f"[UPLOAD-SOURCE] {name} -> source_folder_id={source_folder_id}"
+                )
+
+                _delete_drive_file(service, file_id)
+                summary["deleted"] += 1
+                log.info(f"[DELETE] Deleted source file_id={file_id} ({name})")
+
+                summary["tagged"] += 1
                 continue
 
             summary["identified"] += 1
