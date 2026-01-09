@@ -13,7 +13,10 @@ from kaiano_common_utils.api.music_tag.retagger_api import (
     AcoustIdIdentifier,
     MusicBrainzRecordingProvider,
 )
-from kaiano_common_utils.api.music_tag.retagger_music_tag import MusicTagIO
+from kaiano_common_utils.api.music_tag.retagger_music_tag import (
+    MusicTagIO,
+    get_metadata,
+)
 from kaiano_common_utils.api.music_tag.retagger_types import TagSnapshot, TrackMetadata
 
 
@@ -463,7 +466,7 @@ def process_drive_folder(source_folder_id, dest_folder_id, separator) -> Dict[st
             log.debug(f"Downloaded: {file['name']} to {temp_path}")
 
             renamed_path = rename_music_file(
-                temp_path, tempfile.gettempdir(), separator
+                temp_path, tempfile.gettempdir(), separator, get_metadata(temp_path)
             )
             summary["renamed"] += 1
             log.debug(f"Renamed to: {os.path.basename(renamed_path)}")
