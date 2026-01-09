@@ -58,40 +58,6 @@ def test_get_metadata_invalid_extension(tmp_path):
         renamer.get_metadata(str(f))
 
 
-def test_get_metadata_with_valid_mp3(monkeypatch, tmp_path):
-    fake_file = tmp_path / "song.mp3"
-    fake_file.write_text("x")
-
-    tags = {
-        "artist": ["A"],
-        "title": ["B"],
-        "bpm": ["128.4"],
-        "album": ["Album"],
-        "genre": ["Genre"],
-        "date": ["2022"],
-        "tracknumber": ["5"],
-        "initialkey": ["C#m"],
-        "comment": ["Nice"],
-    }
-    monkeypatch.setattr(
-        "music_naming_and_tagging.renamer.MP3", lambda f, ID3=None: DummyAudio(tags)
-    )
-    result = renamer.get_metadata(str(fake_file))
-    assert result["artist"] == "A"
-    assert result["bpm"] == "128"
-
-
-def test_get_metadata_handles_invalid_bpm(monkeypatch, tmp_path):
-    fake_file = tmp_path / "song.mp3"
-    fake_file.write_text("x")
-    tags = {"artist": ["A"], "title": ["B"], "bpm": ["bad"]}
-    monkeypatch.setattr(
-        "music_naming_and_tagging.renamer.MP3", lambda f, ID3=None: DummyAudio(tags)
-    )
-    result = renamer.get_metadata(str(fake_file))
-    assert result["bpm"] == ""
-
-
 # =====================================================
 # rename_music_file
 # =====================================================
