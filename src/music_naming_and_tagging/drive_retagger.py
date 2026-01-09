@@ -9,6 +9,7 @@ from typing import Any, Dict, Tuple
 import kaiano_common_utils.google_drive as drive
 import kaiano_common_utils.logger as log
 import music_tag
+from mutagen.id3 import ID3, TDRC, TYER, ID3NoHeaderError
 
 from music_naming_and_tagging.retagger_api import (
     AcoustIdIdentifier,
@@ -205,7 +206,9 @@ def _build_updates_with_conflict_logging(
         album=new_meta.album,
         album_artist=new_meta.album_artist,
         year=normalized_year,
-        genre=_title_case_words(genre_to_write),
+        # Genre is fill-only. If we are not writing genre, keep it as None so we do not
+        # overwrite an existing genre tag with an empty string.
+        genre=_title_case_words(genre_to_write) if genre_to_write is not None else None,
         bpm=new_meta.bpm,
         comment=comment_to_write,
         isrc=new_meta.isrc,
@@ -217,6 +220,46 @@ def _build_updates_with_conflict_logging(
     return updates, False
 
 
+def _build_passthrough_updates_from_snapshot(snapshot: TagSnapshot) -> TrackMetadata:
+    """Build updates from tags we already read, to re-write them in a VDJ-friendly way.
+
+    Purpose: sometimes files have tags that `music_tag` can read (and we can log), but
+    VirtualDJ doesn't show them reliably (often due to ID3 version/encoding quirks).
+
+    This function constructs a TrackMetadata using the currently-read tags and lets
+    `MusicTagIO.write()` normalize/write them back out. We keep this conservative and
+    do not invent missing values.
+    """
+    t = snapshot.tags
+
+    title = _safe_str(t.get("tracktitle")).strip()
+    artist = _safe_str(t.get("artist")).strip()
+    album = _safe_str(t.get("album")).strip()
+    album_artist = _safe_str(t.get("albumartist")).strip()
+    genre = _safe_str(t.get("genre")).strip()
+    bpm = _safe_str(t.get("bpm")).strip()
+    comment = _safe_str(t.get("comment")).strip()
+    year = _normalize_year_for_tag(t.get("year") or t.get("date"))
+
+    track_number = _safe_str(t.get("tracknumber")).strip()
+    disc_number = _safe_str(t.get("discnumber")).strip()
+
+    return TrackMetadata(
+        title=title if title else None,
+        artist=artist if artist else None,
+        album=album if album else None,
+        album_artist=album_artist if album_artist else None,
+        year=year if year else None,
+        genre=genre if genre else None,
+        bpm=bpm if bpm else None,
+        comment=comment if comment else None,
+        isrc=None,
+        track_number=track_number if track_number else None,
+        disc_number=disc_number if disc_number else None,
+        raw=getattr(snapshot, "raw", None),
+    )
+
+
 def process_drive_folder_for_retagging(
     source_folder_id: str,
     dest_folder_id: str,
@@ -224,7 +267,7 @@ def process_drive_folder_for_retagging(
     acoustid_api_key: str,
     min_confidence: float = 0.90,
     max_candidates: int = 5,
-    max_uploads_per_run: int = 20,
+    max_uploads_per_run: int = 200,
 ) -> Dict[str, int]:
     """
     Orchestrates:
@@ -301,15 +344,69 @@ def process_drive_folder_for_retagging(
 
             if not candidates:
                 log.info(
-                    f"[IDENTIFY-SKIP] {name}: no candidates returned (continuing without tagging)"
+                    f"[IDENTIFY-SKIP] {name}: no candidates returned (re-writing existing tags + re-uploading to source for VirtualDJ compatibility)"
                 )
+
+                # Even if we can't identify the track, re-write the tags we can already read.
+                # This frequently fixes VirtualDJ showing only title.
+                passthrough_updates = _build_passthrough_updates_from_snapshot(snapshot)
+                tag_io.write(temp_path, passthrough_updates)
+
+                # Re-save ID3 as v2.3 for maximum VirtualDJ compatibility (not just year).
+                try:
+                    try:
+                        id3 = ID3(temp_path)
+                    except ID3NoHeaderError:
+                        id3 = ID3()
+                    id3.save(temp_path, v2_version=3)
+                except Exception:
+                    pass
+
+                # Upload back to the SAME source folder, replacing the original file.
+                drive.upload_file(service, temp_path, source_folder_id, name)
+                summary["uploaded"] += 1
+                log.info(
+                    f"[UPLOAD-SOURCE] {name} -> source_folder_id={source_folder_id}"
+                )
+
+                _delete_drive_file(service, file_id)
+                summary["deleted"] += 1
+                log.info(f"[DELETE] Deleted source file_id={file_id} ({name})")
+
+                # Count as tagged because we performed a tag write.
+                summary["tagged"] += 1
                 continue
 
             chosen = max(candidates, key=lambda c: c.confidence)
             if chosen.confidence < min_confidence:
                 log.info(
-                    f"[IDENTIFY-SKIP] {name}: best score {chosen.confidence:.3f} below threshold {min_confidence:.2f} (continuing without tagging)"
+                    f"[IDENTIFY-SKIP] {name}: best score {chosen.confidence:.3f} below threshold {min_confidence:.2f} (re-writing existing tags + re-uploading to source for VirtualDJ compatibility)"
                 )
+
+                passthrough_updates = _build_passthrough_updates_from_snapshot(snapshot)
+                tag_io.write(temp_path, passthrough_updates)
+
+                # Re-save ID3 as v2.3 for maximum VirtualDJ compatibility (not just year).
+                try:
+                    try:
+                        id3 = ID3(temp_path)
+                    except ID3NoHeaderError:
+                        id3 = ID3()
+                    id3.save(temp_path, v2_version=3)
+                except Exception:
+                    pass
+
+                drive.upload_file(service, temp_path, source_folder_id, name)
+                summary["uploaded"] += 1
+                log.info(
+                    f"[UPLOAD-SOURCE] {name} -> source_folder_id={source_folder_id}"
+                )
+
+                _delete_drive_file(service, file_id)
+                summary["deleted"] += 1
+                log.info(f"[DELETE] Deleted source file_id={file_id} ({name})")
+
+                summary["tagged"] += 1
                 continue
 
             summary["identified"] += 1
@@ -341,6 +438,34 @@ def process_drive_folder_for_retagging(
             # If everything conflicts / nothing to write, we still consider run successful and upload unchanged file.
             # Tagging is only counted if we wrote without raising.
             tag_io.write(temp_path, updates)
+
+            # VirtualDJ has historically been more reliable reading ID3v2.3 TYER.
+            # `music_tag` may write ID3v2.4 (TDRC/date). Here we best-effort ensure a
+            # TYER frame exists and re-save as ID3v2.3 for compatibility.
+            normalized_year = _normalize_year_for_tag(updates.year)
+            if normalized_year:
+                try:
+                    try:
+                        id3 = ID3(temp_path)
+                    except ID3NoHeaderError:
+                        id3 = ID3()
+
+                    # Ensure both frames exist; VirtualDJ often uses TYER.
+                    try:
+                        id3.setall("TYER", [TYER(encoding=3, text=normalized_year)])
+                    except Exception:
+                        pass
+                    try:
+                        id3.setall("TDRC", [TDRC(encoding=3, text=normalized_year)])
+                    except Exception:
+                        pass
+
+                    # Save as ID3v2.3 for maximum player compatibility
+                    id3.save(temp_path, v2_version=3)
+                except Exception:
+                    # Best-effort only; do not fail the tagging pipeline if this step fails.
+                    pass
+
             log.info("[NEW-TAGS]------------------")
             _print_all_tags(temp_path)
             summary["tagged"] += 1
@@ -409,22 +534,9 @@ def main() -> None:
       - ACOUSTID_API_KEY
     """
 
-    # source_folder_id = "1Iu5TwzOXVqCDef2X8S5TZcFo1NdSHpRU"
     source_folder_id = "1hDFTDOavXDtJN-MR-ruqqapMaXGp4mB6"
-    # os.environ.get("MUSIC_UPLOAD_SOURCE_FOLDER_ID") or getattr(
-    #    config, "1Iu5TwzOXVqCDef2X8S5TZcFo1NdSHpRU", None
-    # )
-
-    # dest_folder_id = "17LjjgX4bFwxR4NOnnT38Aflp8DSPpjOu"
     dest_folder_id = "1fL4Q4S1WUefC1QhHIsLuj3_DU1ZZBm_4"
-    # os.environ.get("MUSIC_TAGGING_OUTPUT_FOLDER_ID") or getattr(
-    # config, "17LjjgX4bFwxR4NOnnT38Aflp8DSPpjOu", None
-    # )
     acoustid_api_key = "R1yQzNHear"
-    # os.environ.get("ACOUSTID_API_KEY") or getattr(
-    #    config, "qjhrUALpPV", None
-    # )
-
     if not source_folder_id or not dest_folder_id or not acoustid_api_key:
         raise RuntimeError(
             "Missing required configuration. Set env vars MUSIC_UPLOAD_SOURCE_FOLDER_ID, "
@@ -432,9 +544,9 @@ def main() -> None:
         )
 
     try:
-        max_uploads_per_run = int(os.environ.get("MAX_UPLOADS_PER_RUN", "20"))
+        max_uploads_per_run = int(os.environ.get("MAX_UPLOADS_PER_RUN", "200"))
     except Exception:
-        max_uploads_per_run = 20
+        max_uploads_per_run = 200
 
     process_drive_folder_for_retagging(
         source_folder_id,
