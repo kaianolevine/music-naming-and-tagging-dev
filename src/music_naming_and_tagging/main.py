@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import os
 
-from music_naming_and_tagging.drive_retagger import process_drive_folder_for_retagging
+from kaiano_common_utils.drive_retagger import process_drive_folder_for_retagging
 
 
 def main() -> None:
