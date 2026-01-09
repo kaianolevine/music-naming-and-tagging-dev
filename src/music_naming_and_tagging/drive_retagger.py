@@ -8,8 +8,6 @@ from typing import Any, Dict, Tuple
 
 import kaiano_common_utils.google_drive as drive
 import kaiano_common_utils.logger as log
-import music_tag
-from mutagen.id3 import ID3, TDRC, TYER, ID3NoHeaderError
 
 from music_naming_and_tagging.retagger_api import (
     AcoustIdIdentifier,
@@ -17,22 +15,6 @@ from music_naming_and_tagging.retagger_api import (
 )
 from music_naming_and_tagging.retagger_music_tag import MusicTagIO
 from music_naming_and_tagging.retagger_types import TagSnapshot, TrackMetadata
-
-TAG_FIELDS = [
-    # music-tag keys
-    "tracktitle",
-    "artist",
-    "album",
-    "albumartist",
-    "year",
-    "date",
-    "genre",
-    "bpm",
-    "comment",
-    "isrc",
-    "tracknumber",
-    "discnumber",
-]
 
 
 def _safe_str(v: Any) -> str:
@@ -123,42 +105,11 @@ def _delete_drive_file(service: Any, file_id: str) -> None:
     service.files().delete(fileId=file_id, supportsAllDrives=True).execute()
 
 
-def _print_all_tags(path: str) -> None:
-    try:
-        f = music_tag.load_file(path)
-    except Exception as e:
-        log.error(f"[TAGS-ERROR] Failed to read tags for {os.path.basename(path)}: {e}")
+def _print_all_tags(tag_io: MusicTagIO, path: str) -> None:
+    printed = tag_io.dump_tags(path)
+    if not printed:
         return
 
-    # Try to enumerate everything music-tag knows about.
-    # Not all backends expose a stable tag-key list, so we print a curated set + anything else accessible.
-    printed: Dict[str, str] = {}
-
-    for k in TAG_FIELDS:
-        try:
-            v = f[k]
-            if k == "artwork":
-                continue
-            printed[k] = _safe_str(v)
-        except Exception:
-            printed[k] = ""
-
-    # Attempt to discover additional keys if available
-    extra_keys = []
-    try:
-        extra_keys = [
-            k for k in getattr(f, "keys")() if k not in printed and k != "artwork"
-        ]
-    except Exception:
-        extra_keys = []
-
-    for k in sorted(extra_keys):
-        try:
-            printed[k] = _safe_str(f[k])
-        except Exception:
-            continue
-
-    # Log in a stable order
     log.info(f"[FILE] {os.path.basename(path)}")
     for k in sorted(printed.keys()):
         v = printed[k]
@@ -335,7 +286,7 @@ def process_drive_folder_for_retagging(
 
             # Print existing tags
             log.info("[PRE-EXISTING-TAGS]------------------")
-            _print_all_tags(temp_path)
+            _print_all_tags(tag_io, temp_path)
 
             # Identify
             snapshot = tag_io.read(temp_path)
@@ -350,17 +301,11 @@ def process_drive_folder_for_retagging(
                 # Even if we can't identify the track, re-write the tags we can already read.
                 # This frequently fixes VirtualDJ showing only title.
                 passthrough_updates = _build_passthrough_updates_from_snapshot(snapshot)
-                tag_io.write(temp_path, passthrough_updates)
-
-                # Re-save ID3 as v2.3 for maximum VirtualDJ compatibility (not just year).
-                try:
-                    try:
-                        id3 = ID3(temp_path)
-                    except ID3NoHeaderError:
-                        id3 = ID3()
-                    id3.save(temp_path, v2_version=3)
-                except Exception:
-                    pass
+                tag_io.write(
+                    temp_path,
+                    passthrough_updates,
+                    ensure_virtualdj_compat=True,
+                )
 
                 # Upload back to the SAME source folder, replacing the original file.
                 drive.upload_file(service, temp_path, source_folder_id, name)
@@ -384,17 +329,11 @@ def process_drive_folder_for_retagging(
                 )
 
                 passthrough_updates = _build_passthrough_updates_from_snapshot(snapshot)
-                tag_io.write(temp_path, passthrough_updates)
-
-                # Re-save ID3 as v2.3 for maximum VirtualDJ compatibility (not just year).
-                try:
-                    try:
-                        id3 = ID3(temp_path)
-                    except ID3NoHeaderError:
-                        id3 = ID3()
-                    id3.save(temp_path, v2_version=3)
-                except Exception:
-                    pass
+                tag_io.write(
+                    temp_path,
+                    passthrough_updates,
+                    ensure_virtualdj_compat=True,
+                )
 
                 drive.upload_file(service, temp_path, source_folder_id, name)
                 summary["uploaded"] += 1
@@ -437,37 +376,14 @@ def process_drive_folder_for_retagging(
 
             # If everything conflicts / nothing to write, we still consider run successful and upload unchanged file.
             # Tagging is only counted if we wrote without raising.
-            tag_io.write(temp_path, updates)
-
-            # VirtualDJ has historically been more reliable reading ID3v2.3 TYER.
-            # `music_tag` may write ID3v2.4 (TDRC/date). Here we best-effort ensure a
-            # TYER frame exists and re-save as ID3v2.3 for compatibility.
-            normalized_year = _normalize_year_for_tag(updates.year)
-            if normalized_year:
-                try:
-                    try:
-                        id3 = ID3(temp_path)
-                    except ID3NoHeaderError:
-                        id3 = ID3()
-
-                    # Ensure both frames exist; VirtualDJ often uses TYER.
-                    try:
-                        id3.setall("TYER", [TYER(encoding=3, text=normalized_year)])
-                    except Exception:
-                        pass
-                    try:
-                        id3.setall("TDRC", [TDRC(encoding=3, text=normalized_year)])
-                    except Exception:
-                        pass
-
-                    # Save as ID3v2.3 for maximum player compatibility
-                    id3.save(temp_path, v2_version=3)
-                except Exception:
-                    # Best-effort only; do not fail the tagging pipeline if this step fails.
-                    pass
+            tag_io.write(
+                temp_path,
+                updates,
+                ensure_virtualdj_compat=True,
+            )
 
             log.info("[NEW-TAGS]------------------")
-            _print_all_tags(temp_path)
+            _print_all_tags(tag_io, temp_path)
             summary["tagged"] += 1
             if had_conflict:
                 log.info(
