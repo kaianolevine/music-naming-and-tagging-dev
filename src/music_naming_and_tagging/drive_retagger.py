@@ -258,7 +258,7 @@ def _build_passthrough_updates_from_snapshot(snapshot: TagSnapshot) -> TrackMeta
         isrc=None,
         track_number=track_number if track_number else None,
         disc_number=disc_number if disc_number else None,
-        raw=snapshot.raw,
+        raw=getattr(snapshot, "raw", None),
     )
 
 
