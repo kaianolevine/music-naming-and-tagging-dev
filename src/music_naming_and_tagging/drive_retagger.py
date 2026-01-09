@@ -6,18 +6,16 @@ import tempfile
 import unicodedata
 from typing import Any, Dict, Tuple
 
-# import kaiano_common_utils.config as config
 import kaiano_common_utils.google_drive as drive
 import kaiano_common_utils.logger as log
 import music_tag
 
-from music_naming_and_tagging.retagger import (
+from music_naming_and_tagging.retagger_api import (
     AcoustIdIdentifier,
     MusicBrainzRecordingProvider,
-    MusicTagIO,
-    TagSnapshot,
-    TrackMetadata,
 )
+from music_naming_and_tagging.retagger_music_tag import MusicTagIO
+from music_naming_and_tagging.retagger_types import TagSnapshot, TrackMetadata
 
 TAG_FIELDS = [
     # music-tag keys

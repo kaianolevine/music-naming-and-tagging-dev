@@ -5,10 +5,11 @@ from typing import Dict, List, Optional
 
 import kaiano_common_utils.google_drive as drive
 import kaiano_common_utils.logger as log
-from mutagen.easyid3 import EasyID3
-from mutagen.flac import FLAC
-from mutagen.mp3 import MP3
-from mutagen.mp4 import MP4
+import music_tag
+
+from music_naming_and_tagging.retagger_music_tag import MusicTagIO
+
+_TAG_IO = MusicTagIO()
 
 
 def new_sanitize_filename(value: str) -> str:
@@ -45,37 +46,49 @@ def get_metadata(file_path: str) -> Dict[str, str]:
     Returns keys: artist, title, bpm, comment, album, genre, year, tracknumber, key
     Missing values default to "" (empty string) except artist/title -> "Unknown".
     """
+    # Preserve existing behavior: only support these extensions.
     ext = file_path.lower().split(".")[-1]
-    audio = None
-    if ext == "mp3":
-        audio = MP3(file_path, ID3=EasyID3)
-    elif ext == "flac":
-        audio = FLAC(file_path)
-    elif ext in ("m4a", "mp4"):
-        audio = MP4(file_path)
-    else:
+    if ext not in ("mp3", "flac", "m4a", "mp4"):
         raise ValueError(f"Unsupported file format: {ext}")
 
-    tags = audio.tags or {}
+    # Use the shared music-tag adapter for consistent tag reading.
+    snapshot = _TAG_IO.read(file_path)
+    tags = dict(snapshot.tags or {})
+
+    # For backward-compatibility with prior mutagen-based behavior, also try to read
+    # key-related tags (which may not be included in the adapter's default field list).
+    try:
+        f = music_tag.load_file(file_path)
+        for k in ("initialkey", "key"):
+            if k not in tags and k in f:
+                v = f[k]
+                if isinstance(v, list):
+                    tags[k] = ", ".join([str(x) for x in v if x is not None])
+                else:
+                    tags[k] = str(v)
+    except Exception:
+        # If key tags can't be read, keep defaults below.
+        pass
 
     def _get(tag: str, default: str = "") -> str:
         try:
-            val = tags.get(tag, [default])
-            if isinstance(val, (list, tuple)):
-                return str(val[0]) if val else default
-            return str(val)
+            v = tags.get(tag, default)
+            if v is None:
+                return default
+            s = str(v)
+            return s if s != "None" else default
         except Exception:
             return default
 
     artist = _get("artist", "Unknown")
-    title = _get("title", "Unknown")
+    title = _get("tracktitle", "Unknown")
+
     bpm_raw = _get("bpm", "")
     try:
         bpm = str(int(round(float(bpm_raw)))) if bpm_raw not in (None, "") else ""
     except (ValueError, TypeError):
         bpm = ""
 
-    # Common additional fields
     album = _get("album", "")
     genre = _get("genre", "")
     year = _get("date", "") or _get("year", "")
