@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import os
-
 from music_naming_and_tagging.drive_retagger import process_drive_folder_for_retagging
 
 
@@ -13,6 +11,7 @@ def main() -> None:
       - MUSIC_UPLOAD_SOURCE_FOLDER_ID
       - MUSIC_TAGGING_OUTPUT_FOLDER_ID
       - ACOUSTID_API_KEY
+      - MAX_UPLOADS_PER_RUN
     """
 
     source_folder_id = "1hDFTDOavXDtJN-MR-ruqqapMaXGp4mB6"
@@ -24,11 +23,7 @@ def main() -> None:
             "MUSIC_TAGGING_OUTPUT_FOLDER_ID, ACOUSTID_API_KEY (or define them in kaiano_common_utils.config)."
         )
 
-    try:
-        max_uploads_per_run = int(os.environ.get("MAX_UPLOADS_PER_RUN", "200"))
-    except Exception:
-        max_uploads_per_run = 200
-
+    max_uploads_per_run = 200
     process_drive_folder_for_retagging(
         source_folder_id,
         dest_folder_id,

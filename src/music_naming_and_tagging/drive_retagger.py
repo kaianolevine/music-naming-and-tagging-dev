@@ -1,111 +1,18 @@
 from __future__ import annotations
 
 import os
-import re
 import tempfile
-import unicodedata
 from typing import Any, Dict, Tuple
 
 import kaiano_common_utils.api.google.drive as drive
+import kaiano_common_utils.helpers as helpers
 import kaiano_common_utils.logger as log
 from kaiano_common_utils.api.music_tag.retagger_api import (
     AcoustIdIdentifier,
     MusicBrainzRecordingProvider,
 )
-from kaiano_common_utils.api.music_tag.retagger_music_tag import (
-    MusicTagIO,
-    get_metadata,
-)
+from kaiano_common_utils.api.music_tag.retagger_music_tag import MusicTagIO
 from kaiano_common_utils.api.music_tag.retagger_types import TagSnapshot, TrackMetadata
-from kaiano_common_utils.mp3_rename import rename_music_file
-
-
-def _safe_str(v: Any) -> str:
-    """Best-effort stringify without turning missing values into the literal 'None'."""
-    if v is None:
-        return ""
-    try:
-        s = str(v)
-    except Exception:
-        return ""
-    # Some tag wrappers stringify missing values as "None"
-    if s.strip().lower() == "none":
-        return ""
-    return s
-
-
-def _title_case_words(v: Any) -> str:
-    """
-    Capitalize every word that starts with a letter.
-    Preserves existing punctuation and spacing.
-    """
-    s = _safe_str(v)
-    if not s:
-        return ""
-
-    def repl(match: re.Match) -> str:
-        word = match.group(0)
-        return word[0].upper() + word[1:]
-
-    # Capitalize words that start with an alphabetic character
-    return re.sub(r"\b[a-zA-Z][^\s]*", repl, s)
-
-
-def _normalize_for_compare(v: Any) -> str:
-    """Canonical comparison: None / 'None' / whitespace all become empty string."""
-    return _safe_str(v).strip()
-
-
-def _normalize_year_for_tag(v: Any) -> str:
-    s = _safe_str(v).strip()
-    if not s:
-        return ""
-    if len(s) >= 4 and s[:4].isdigit():
-        return s[:4]
-    return ""
-
-
-def _safe_filename_component(v: Any) -> str:
-    """
-    Normalize a value for safe, deterministic filenames.
-
-    Rules:
-    - Convert to string
-    - Strip accents / diacritics
-    - Lowercase
-    - Remove all whitespace
-    - Remove all non-alphanumeric characters (except underscore)
-    - Collapse multiple underscores
-    """
-    s = _safe_str(v)
-
-    if not s:
-        return ""
-
-    # Normalize unicode (e.g. Beyoncé -> Beyonce)
-    s = unicodedata.normalize("NFKD", s)
-    s = "".join(c for c in s if not unicodedata.combining(c))
-
-    s = s.lower()
-
-    # Remove whitespace entirely
-    s = re.sub(r"\s+", "", s)
-
-    # Replace any remaining invalid chars with underscore
-    s = re.sub(r"[^a-z0-9_]", "_", s)
-
-    # Collapse multiple underscores
-    s = re.sub(r"_+", "_", s)
-
-    return s.strip("_")
-
-
-def _delete_drive_file(service: Any, file_id: str) -> None:
-    """
-    Permanently delete a file from Google Drive.
-    Only call this after a successful end-to-end process.
-    """
-    service.files().delete(fileId=file_id, supportsAllDrives=True).execute()
 
 
 def _print_all_tags(tag_io: MusicTagIO, path: str) -> None:
@@ -139,11 +46,11 @@ def _build_updates_with_conflict_logging(
     """
     Overwrite existing tag values with new metadata when provided, except for genre (fill-only).
     """
-    existing_genre = _normalize_for_compare(existing.tags.get("genre"))
-    new_genre = _normalize_for_compare(new_meta.genre)
+    existing_genre = helpers.normalize_for_compare(existing.tags.get("genre"))
+    new_genre = helpers.normalize_for_compare(new_meta.genre)
     genre_to_write = new_meta.genre if (not existing_genre and new_genre) else None
 
-    existing_comment = _safe_str(existing.tags.get("comment")).strip()
+    existing_comment = helpers.safe_str(existing.tags.get("comment")).strip()
     if existing_comment == "":
         comment_to_write = "<KAT_v1>"
     elif existing_comment.startswith("<KAT_v1>"):
@@ -152,17 +59,21 @@ def _build_updates_with_conflict_logging(
     else:
         comment_to_write = "<KAT_v1> " + existing_comment
 
-    normalized_year = _normalize_year_for_tag(new_meta.year)
+    normalized_year = helpers.normalize_year_for_tag(new_meta.year)
 
     updates = TrackMetadata(
-        title=_title_case_words(new_meta.title),
-        artist=_title_case_words(new_meta.artist),
+        title=helpers.title_case_words(new_meta.title),
+        artist=helpers.title_case_words(new_meta.artist),
         album=new_meta.album,
         album_artist=new_meta.album_artist,
         year=normalized_year,
         # Genre is fill-only. If we are not writing genre, keep it as None so we do not
         # overwrite an existing genre tag with an empty string.
-        genre=_title_case_words(genre_to_write) if genre_to_write is not None else None,
+        genre=(
+            helpers.title_case_words(genre_to_write)
+            if genre_to_write is not None
+            else None
+        ),
         bpm=new_meta.bpm,
         comment=comment_to_write,
         isrc=new_meta.isrc,
@@ -186,17 +97,17 @@ def _build_passthrough_updates_from_snapshot(snapshot: TagSnapshot) -> TrackMeta
     """
     t = snapshot.tags
 
-    title = _safe_str(t.get("tracktitle")).strip()
-    artist = _safe_str(t.get("artist")).strip()
-    album = _safe_str(t.get("album")).strip()
-    album_artist = _safe_str(t.get("albumartist")).strip()
-    genre = _safe_str(t.get("genre")).strip()
-    bpm = _safe_str(t.get("bpm")).strip()
-    comment = _safe_str(t.get("comment")).strip()
-    year = _normalize_year_for_tag(t.get("year") or t.get("date"))
+    title = helpers.safe_str(t.get("tracktitle")).strip()
+    artist = helpers.safe_str(t.get("artist")).strip()
+    album = helpers.safe_str(t.get("album")).strip()
+    album_artist = helpers.safe_str(t.get("albumartist")).strip()
+    genre = helpers.safe_str(t.get("genre")).strip()
+    bpm = helpers.safe_str(t.get("bpm")).strip()
+    comment = helpers.safe_str(t.get("comment")).strip()
+    year = helpers.normalize_year_for_tag(t.get("year") or t.get("date"))
 
-    track_number = _safe_str(t.get("tracknumber")).strip()
-    disc_number = _safe_str(t.get("discnumber")).strip()
+    track_number = helpers.safe_str(t.get("tracknumber")).strip()
+    disc_number = helpers.safe_str(t.get("discnumber")).strip()
 
     return TrackMetadata(
         title=title if title else None,
@@ -317,7 +228,7 @@ def process_drive_folder_for_retagging(
                     f"[UPLOAD-SOURCE] {name} -> source_folder_id={source_folder_id}"
                 )
 
-                _delete_drive_file(service, file_id)
+                drive.delete_drive_file(service, file_id)
                 summary["deleted"] += 1
                 log.info(f"[DELETE] Deleted source file_id={file_id} ({name})")
 
@@ -344,7 +255,7 @@ def process_drive_folder_for_retagging(
                     f"[UPLOAD-SOURCE] {name} -> source_folder_id={source_folder_id}"
                 )
 
-                _delete_drive_file(service, file_id)
+                drive.delete_drive_file(service, file_id)
                 summary["deleted"] += 1
                 log.info(f"[DELETE] Deleted source file_id={file_id} ({name})")
 
@@ -397,8 +308,8 @@ def process_drive_folder_for_retagging(
 
             # Rename file to Title_Artist.ext before upload
             base, ext = os.path.splitext(name)
-            title_part = _safe_filename_component(updates.title)
-            artist_part = _safe_filename_component(updates.artist)
+            title_part = helpers.safe_filename_component(updates.title)
+            artist_part = helpers.safe_filename_component(updates.artist)
 
             if title_part and artist_part:
                 new_name = f"{title_part}_{artist_part}{ext}"
@@ -424,7 +335,7 @@ def process_drive_folder_for_retagging(
             summary["uploaded"] += 1
             log.info(f"[UPLOAD] {new_name} -> dest_folder_id={dest_folder_id}")
 
-            _delete_drive_file(service, file_id)
+            drive.delete_drive_file(service, file_id)
             summary["deleted"] += 1
             log.info(f"[DELETE] Deleted source file_id={file_id} ({name})")
 
@@ -440,44 +351,4 @@ def process_drive_folder_for_retagging(
                 pass
 
     log.info(f"[DONE] Summary: {summary}")
-    return summary
-
-
-def process_drive_folder(source_folder_id, dest_folder_id, separator) -> Dict[str, int]:
-    """
-    Download files from Drive, rename locally, and upload back to Drive.
-
-    Returns a summary dict: {"downloaded": int, "renamed": int, "uploaded": int, "failed": int}
-    """
-    log.info(
-        f"Processing Drive folder with parameters: source_folder_id={source_folder_id}, dest_folder_id={dest_folder_id}, separator='{separator}'"
-    )
-
-    service = drive.get_drive_service()
-
-    summary = {"downloaded": 0, "renamed": 0, "uploaded": 0, "failed": 0}
-
-    music_files = drive.list_music_files(service, source_folder_id)
-    for file in music_files:
-        try:
-            temp_path = os.path.join(tempfile.gettempdir(), file["name"])
-            drive.download_file(service, file["id"], temp_path)
-            summary["downloaded"] += 1
-            log.debug(f"Downloaded: {file['name']} to {temp_path}")
-
-            renamed_path = rename_music_file(
-                temp_path, tempfile.gettempdir(), separator, get_metadata(temp_path)
-            )
-            summary["renamed"] += 1
-            log.debug(f"Renamed to: {os.path.basename(renamed_path)}")
-
-            drive.upload_file(service, renamed_path, dest_folder_id)
-            summary["uploaded"] += 1
-            log.debug(f"Uploaded: {os.path.basename(renamed_path)}")
-        except Exception:
-            log.error(
-                f"Failed processing Drive file: {file.get('name')}", exc_info=True
-            )
-            summary["failed"] += 1
-    log.info(f"Drive process summary: {summary}")
     return summary
