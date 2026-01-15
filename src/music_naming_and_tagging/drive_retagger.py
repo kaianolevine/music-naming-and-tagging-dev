@@ -7,8 +7,14 @@ from typing import Any, Dict, Tuple
 import kaiano_common_utils.helpers as helpers
 import kaiano_common_utils.logger as log
 from kaiano_common_utils.api.google import GoogleAPI
-from kaiano_common_utils.api.identify_audio import IdentificationPolicy, IdentifyAudio
-from kaiano_common_utils.api.music_tag.retagger_types import TagSnapshot, TrackMetadata
+from kaiano_common_utils.library.identify_audio import (
+    IdentificationPolicy,
+    IdentifyAudio,
+)
+from kaiano_common_utils.library.identify_audio.retagger_types import (
+    TagSnapshot,
+    TrackMetadata,
+)
 
 
 def _print_all_tags(ia: IdentifyAudio, path: str) -> None:
