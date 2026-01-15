@@ -361,7 +361,7 @@ def process_drive_folder_for_retagging(
                 )
 
                 # Upload back to the SAME Drive file id (in-place update).
-                g.drive.upload_file_version(file_id, temp_path)
+                # g.drive.upload_file_version(file_id, temp_path)
                 summary["uploaded"] += 1
                 log.info(f"[UPLOAD-SOURCE] Updated in place file_id={file_id} ({name})")
 
@@ -383,7 +383,7 @@ def process_drive_folder_for_retagging(
                 )
 
                 # Upload back to the SAME Drive file id (in-place update).
-                g.drive.upload_file_version(file_id, temp_path)
+                # g.drive.upload_file_version(file_id, temp_path)
                 summary["uploaded"] += 1
                 log.info(f"[UPLOAD-SOURCE] Updated in place file_id={file_id} ({name})")
 
