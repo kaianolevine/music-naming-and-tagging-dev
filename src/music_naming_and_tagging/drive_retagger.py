@@ -4,7 +4,6 @@ import os
 import tempfile
 from typing import Any, Dict, Tuple
 
-import kaiano_common_utils.api.google.drive as drive
 import kaiano_common_utils.helpers as helpers
 import kaiano_common_utils.logger as log
 from kaiano_common_utils.api.music_tag.retagger_api import (
@@ -13,6 +12,7 @@ from kaiano_common_utils.api.music_tag.retagger_api import (
 )
 from kaiano_common_utils.api.music_tag.retagger_music_tag import MusicTagIO
 from kaiano_common_utils.api.music_tag.retagger_types import TagSnapshot, TrackMetadata
+from kaiano_common_utils.google import GoogleAPI
 
 
 def _print_all_tags(tag_io: MusicTagIO, path: str) -> None:
@@ -125,6 +125,48 @@ def _build_passthrough_updates_from_snapshot(snapshot: TagSnapshot) -> TrackMeta
     )
 
 
+def _list_music_files(g: GoogleAPI, folder_id: str) -> list[dict]:
+    """List likely-audio files in a Drive folder.
+
+    The new unified Drive facade is intentionally generic; this helper preserves the
+    previous behavior of `drive.list_music_files(...)` in a local, explicit way.
+
+    Returns Drive file dicts with at least `id` and `name`.
+    """
+
+    # Common audio MIME types encountered in Drive.
+    mime_types = [
+        "audio/mpeg",  # mp3
+        "audio/mp4",  # m4a/mp4 audio
+        "audio/x-m4a",  # sometimes used for m4a
+        "audio/wav",
+        "audio/x-wav",
+        "audio/flac",
+        "audio/aac",
+        "audio/ogg",
+        "audio/x-aiff",
+        "audio/aiff",
+    ]
+
+    files: list[dict] = []
+    seen: set[str] = set()
+
+    for mt in mime_types:
+        for f in g.drive.list_files(parent_id=folder_id, mime_type=mt, trashed=False):
+            fid = f.get("id")
+            if not fid or fid in seen:
+                continue
+            seen.add(fid)
+            files.append(f)
+
+    # Fallback: if nothing matched by mime type, return everything in the folder.
+    # This mirrors prior behavior where Drive metadata was occasionally inconsistent.
+    if not files:
+        files = g.drive.list_files(parent_id=folder_id, trashed=False)
+
+    return files
+
+
 def process_drive_folder_for_retagging(
     source_folder_id: str,
     dest_folder_id: str,
@@ -147,7 +189,7 @@ def process_drive_folder_for_retagging(
     Returns summary:
       {"scanned": int, "downloaded": int, "identified": int, "tagged": int, "uploaded": int, "failed": int}
     """
-    service = drive.get_drive_service()
+    g = GoogleAPI.from_env()
 
     identifier = AcoustIdIdentifier(
         api_key=acoustid_api_key,
@@ -172,7 +214,7 @@ def process_drive_folder_for_retagging(
         "deleted": 0,
     }
 
-    music_files = drive.list_music_files(service, source_folder_id)
+    music_files = _list_music_files(g, source_folder_id)
     log.info(
         f"[START] Found {len(music_files)} music files in source folder (max uploads per run={max_uploads_per_run})."
     )
@@ -195,7 +237,7 @@ def process_drive_folder_for_retagging(
 
         try:
             log.info(f"[DOWNLOAD] {name} ({file_id}) -> {temp_path}")
-            drive.download_file(service, file_id, temp_path)
+            g.drive.download_file(file_id, temp_path)
             summary["downloaded"] += 1
 
             # Print existing tags
@@ -222,13 +264,13 @@ def process_drive_folder_for_retagging(
                 )
 
                 # Upload back to the SAME source folder, replacing the original file.
-                drive.upload_file(service, temp_path, source_folder_id, name)
+                g.drive.upload_file(temp_path, parent_id=source_folder_id, name=name)
                 summary["uploaded"] += 1
                 log.info(
                     f"[UPLOAD-SOURCE] {name} -> source_folder_id={source_folder_id}"
                 )
 
-                drive.delete_drive_file(service, file_id)
+                g.drive.delete_file(file_id)
                 summary["deleted"] += 1
                 log.info(f"[DELETE] Deleted source file_id={file_id} ({name})")
 
@@ -249,13 +291,13 @@ def process_drive_folder_for_retagging(
                     ensure_virtualdj_compat=True,
                 )
 
-                drive.upload_file(service, temp_path, source_folder_id, name)
+                g.drive.upload_file(temp_path, parent_id=source_folder_id, name=name)
                 summary["uploaded"] += 1
                 log.info(
                     f"[UPLOAD-SOURCE] {name} -> source_folder_id={source_folder_id}"
                 )
 
-                drive.delete_drive_file(service, file_id)
+                g.drive.delete_file(file_id)
                 summary["deleted"] += 1
                 log.info(f"[DELETE] Deleted source file_id={file_id} ({name})")
 
@@ -331,11 +373,11 @@ def process_drive_folder_for_retagging(
                     log.error(f"[RENAME-ERROR] Failed to rename {name}: {e}")
 
             # Upload to destination
-            drive.upload_file(service, temp_path, dest_folder_id, new_name)
+            g.drive.upload_file(temp_path, parent_id=dest_folder_id, name=new_name)
             summary["uploaded"] += 1
             log.info(f"[UPLOAD] {new_name} -> dest_folder_id={dest_folder_id}")
 
-            drive.delete_drive_file(service, file_id)
+            g.drive.delete_file(file_id)
             summary["deleted"] += 1
             log.info(f"[DELETE] Deleted source file_id={file_id} ({name})")
 
