@@ -125,13 +125,13 @@ def _build_passthrough_updates_from_snapshot(snapshot: TagSnapshot) -> TrackMeta
     )
 
 
-def _list_music_files(g: GoogleAPI, folder_id: str) -> list[dict]:
+def _list_music_files(g: GoogleAPI, folder_id: str) -> list[Any]:
     """List likely-audio files in a Drive folder.
 
     The new unified Drive facade is intentionally generic; this helper preserves the
     previous behavior of `drive.list_music_files(...)` in a local, explicit way.
 
-    Returns Drive file dicts with at least `id` and `name`.
+    Returns DriveFile objects with at least `id` and `name` attributes.
     """
 
     # Common audio MIME types encountered in Drive.
@@ -153,7 +153,7 @@ def _list_music_files(g: GoogleAPI, folder_id: str) -> list[dict]:
 
     for mt in mime_types:
         for f in g.drive.list_files(parent_id=folder_id, mime_type=mt, trashed=False):
-            fid = f.get("id")
+            fid = getattr(f, "id", None)
             if not fid or fid in seen:
                 continue
             seen.add(fid)
@@ -231,8 +231,8 @@ def process_drive_folder_for_retagging(
             break
 
         summary["scanned"] += 1
-        file_id = file.get("id")
-        name = file.get("name", "unknown")
+        file_id = getattr(file, "id", None)
+        name = getattr(file, "name", "unknown")
         temp_path = os.path.join(tempfile.gettempdir(), f"{file_id}_{name}")
 
         try:
@@ -264,7 +264,9 @@ def process_drive_folder_for_retagging(
                 )
 
                 # Upload back to the SAME source folder, replacing the original file.
-                g.drive.upload_file(temp_path, parent_id=source_folder_id, name=name)
+                g.drive.upload_file(
+                    temp_path, parent_id=source_folder_id, dest_name=name
+                )
                 summary["uploaded"] += 1
                 log.info(
                     f"[UPLOAD-SOURCE] {name} -> source_folder_id={source_folder_id}"
@@ -291,7 +293,7 @@ def process_drive_folder_for_retagging(
                     ensure_virtualdj_compat=True,
                 )
 
-                g.drive.upload_file(temp_path, parent_id=source_folder_id, name=name)
+                g.drive.upload_file(temp_path, parent_id=dest_folder_id, dest_name=name)
                 summary["uploaded"] += 1
                 log.info(
                     f"[UPLOAD-SOURCE] {name} -> source_folder_id={source_folder_id}"
