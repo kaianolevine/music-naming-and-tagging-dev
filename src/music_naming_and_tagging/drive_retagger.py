@@ -360,18 +360,10 @@ def process_drive_folder_for_retagging(
                     ensure_virtualdj_compat=True,
                 )
 
-                # Upload back to the SAME source folder, replacing the original file.
-                g.drive.upload_file(
-                    temp_path, parent_id=source_folder_id, dest_name=name
-                )
+                # Upload back to the SAME Drive file id (in-place update).
+                g.drive.upload_file_version(file_id, temp_path)
                 summary["uploaded"] += 1
-                log.info(
-                    f"[UPLOAD-SOURCE] {name} -> source_folder_id={source_folder_id}"
-                )
-
-                g.drive.delete_file(file_id)
-                summary["deleted"] += 1
-                log.info(f"[DELETE] Deleted source file_id={file_id} ({name})")
+                log.info(f"[UPLOAD-SOURCE] Updated in place file_id={file_id} ({name})")
 
                 # Count as tagged because we performed a tag write.
                 summary["tagged"] += 1
@@ -390,17 +382,10 @@ def process_drive_folder_for_retagging(
                     ensure_virtualdj_compat=True,
                 )
 
-                g.drive.upload_file(
-                    temp_path, parent_id=source_folder_id, dest_name=name
-                )
+                # Upload back to the SAME Drive file id (in-place update).
+                g.drive.upload_file_version(file_id, temp_path)
                 summary["uploaded"] += 1
-                log.info(
-                    f"[UPLOAD-SOURCE] {name} -> source_folder_id={source_folder_id}"
-                )
-
-                g.drive.delete_file(file_id)
-                summary["deleted"] += 1
-                log.info(f"[DELETE] Deleted source file_id={file_id} ({name})")
+                log.info(f"[UPLOAD-SOURCE] Updated in place file_id={file_id} ({name})")
 
                 summary["tagged"] += 1
                 continue
