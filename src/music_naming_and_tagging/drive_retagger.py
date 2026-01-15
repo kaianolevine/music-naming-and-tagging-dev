@@ -6,13 +6,13 @@ from typing import Any, Dict, Tuple
 
 import kaiano_common_utils.helpers as helpers
 import kaiano_common_utils.logger as log
+from kaiano_common_utils.api.google import GoogleAPI
 from kaiano_common_utils.api.music_tag.retagger_api import (
     AcoustIdIdentifier,
     MusicBrainzRecordingProvider,
 )
 from kaiano_common_utils.api.music_tag.retagger_music_tag import MusicTagIO
 from kaiano_common_utils.api.music_tag.retagger_types import TagSnapshot, TrackMetadata
-from kaiano_common_utils.google import GoogleAPI
 
 
 def _print_all_tags(tag_io: MusicTagIO, path: str) -> None:
