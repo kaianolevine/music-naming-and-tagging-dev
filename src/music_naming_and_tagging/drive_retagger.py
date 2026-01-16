@@ -22,18 +22,6 @@ def _print_all_tags(tool: AudioToolbox, path: str) -> None:
         log.info(f"  [TAG] {k} = {v}")
 
 
-def _log_candidate_options(
-    name: str, candidates: list[Any], *, max_show: int = 5
-) -> None:
-    if not candidates:
-        log.info(f"[CANDIDATES] {name}: none")
-        return
-
-    top = sorted(candidates, key=lambda c: c.confidence, reverse=True)[:max_show]
-    rendered = ", ".join(f"{c.provider}:{c.id}({c.confidence:.3f})" for c in top)
-    log.info(f"[CANDIDATES] {name}: {rendered}")
-
-
 def _list_music_files(g: GoogleAPI, folder_id: str) -> list[Any]:
     """List likely-audio files in a Drive folder.
 
