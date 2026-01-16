@@ -137,6 +137,7 @@ def process_drive_folder_for_retagging(
             continue
 
         temp_path = os.path.join(tempfile.gettempdir(), f"{file_id}_{name}")
+        result = None
 
         try:
             log.info(f"[DOWNLOAD] {name} ({file_id}) -> {temp_path}")
@@ -146,11 +147,6 @@ def process_drive_folder_for_retagging(
             # Print existing tags
             log.info("[PRE-EXISTING-TAGS]------------------")
             _print_all_tags(tool, temp_path)
-
-            # Identify and tag using the new pipeline
-            snapshot = tool.tags.read(temp_path)
-            candidates = tool.identify.candidates(temp_path, snapshot)
-            _log_candidate_options(name, candidates, max_show=max_candidates)
 
             # Use the local-only pipeline to optionally identify, tag, and rename.
             result = tool.pipeline.process_file(
@@ -198,11 +194,8 @@ def process_drive_folder_for_retagging(
             # Best-effort cleanup
             try:
                 paths = {temp_path}
-                try:
-                    if "result" in locals() and getattr(result, "path_out", None):
-                        paths.add(result.path_out)
-                except Exception:
-                    pass
+                if result and getattr(result, "path_out", None):
+                    paths.add(result.path_out)
 
                 for p in paths:
                     if p and os.path.exists(p):
