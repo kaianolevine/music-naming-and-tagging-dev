@@ -5,8 +5,8 @@ import tempfile
 from typing import Any, Dict
 
 import kaiano_common_utils.logger as log
-from kaiano_common_utils.api.google import GoogleAPI
-from kaiano_common_utils.library.identify_audio import AudioToolbox
+from kaiano_common_utils.google import GoogleAPI
+from kaiano_common_utils.identify_audio import AudioToolbox
 
 
 def _print_all_tags(tool: AudioToolbox, path: str) -> None:
