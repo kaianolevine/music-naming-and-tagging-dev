@@ -9,7 +9,7 @@ packages = [{ include = "music_naming_and_tagging", from = "src" }]
 
 [tool.poetry.dependencies]
 python = ">=3.10,<4.0"
-kaiano-common-utils = { git = "https://github.com/kaianolevine/kaiano-common-utils.git", branch = "main" }
+kaiano = { git = "https://github.com/kaianolevine/kaiano-common-utils.git", branch = "main" }
 music-tag = "^0.4.3"
 pyacoustid = "^1.2.2"
 musicbrainzngs = "^0.7.1"
