@@ -7,7 +7,7 @@ def main() -> None:
     """
     Entrypoint.
 
-    Expects these env vars (or you can wire it from kaiano_common_utils.config):
+    Expects these env vars (or you can wire it from kaiano.config):
       - MUSIC_UPLOAD_SOURCE_FOLDER_ID
       - MUSIC_TAGGING_OUTPUT_FOLDER_ID
       - ACOUSTID_API_KEY
@@ -20,7 +20,7 @@ def main() -> None:
     if not source_folder_id or not dest_folder_id or not acoustid_api_key:
         raise RuntimeError(
             "Missing required configuration. Set env vars MUSIC_UPLOAD_SOURCE_FOLDER_ID, "
-            "MUSIC_TAGGING_OUTPUT_FOLDER_ID, ACOUSTID_API_KEY (or define them in kaiano_common_utils.config)."
+            "MUSIC_TAGGING_OUTPUT_FOLDER_ID, ACOUSTID_API_KEY (or define them in kaiano.config)."
         )
 
     max_uploads_per_run = 200
