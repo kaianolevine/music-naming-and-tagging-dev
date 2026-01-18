@@ -4,9 +4,9 @@ import os
 import tempfile
 from typing import Any, Dict
 
-import kaiano_common_utils.logger as log
-from kaiano_common_utils.google import GoogleAPI
-from kaiano_common_utils.identify_audio import AudioToolbox
+import kaiano.logger as log
+from kaiano.google import GoogleAPI
+from kaiano.identify_audio import AudioToolbox
 
 
 def _print_all_tags(tool: AudioToolbox, path: str) -> None:
@@ -27,8 +27,6 @@ def _list_music_files(g: GoogleAPI, folder_id: str) -> list[Any]:
 
     The new unified Drive facade is intentionally generic; this helper preserves the
     previous behavior of `drive.list_music_files(...)` in a local, explicit way.
-
-    Returns DriveFile objects with at least `id` and `name` attributes.
     """
 
     # Common audio MIME types encountered in Drive.
