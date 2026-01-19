@@ -7,7 +7,7 @@ from typing import Any, Dict
 import kaiano.logger as log
 from kaiano.google import GoogleAPI
 from kaiano.mp3.identify import IdentificationPolicy, Mp3Identifier
-from kaiano.mp3.name import Mp3Renamer
+from kaiano.mp3.rename import Mp3Renamer
 from kaiano.mp3.tag import Mp3Tagger
 
 
