@@ -6,17 +6,19 @@ from typing import Any, Dict
 
 import kaiano.logger as log
 from kaiano.google import GoogleAPI
-from kaiano.identify_audio import AudioToolbox
+from kaiano.identify_audio.mp3.identify import IdentificationPolicy, Mp3Identifier
+from kaiano.identify_audio.mp3.name import Mp3Renamer
+from kaiano.identify_audio.mp3.tag import Mp3Tagger
 
 
-def _print_all_tags(tool: AudioToolbox, path: str) -> None:
-    printed = tool.tags.dump(path)
+def _print_all_tags(tagger: Mp3Tagger, path: str) -> None:
+    printed = tagger.dump(path)
     if not printed:
         return
 
     log.info(f"[FILE] {os.path.basename(path)}")
     for k in sorted(printed.keys()):
-        v = printed[k]
+        v = printed.get(k, "")
         if v is None:
             v = ""
         log.info(f"  [TAG] {k} = {v}")
@@ -86,7 +88,17 @@ def process_drive_folder_for_retagging(
     """
     g = GoogleAPI.from_env()
 
-    tool = AudioToolbox.from_env(acoustid_api_key=acoustid_api_key)
+    policy = IdentificationPolicy(
+        min_confidence=min_confidence,
+        max_candidates=max_candidates,
+        fetch_metadata_min_confidence=min_confidence,
+    )
+
+    identifier = Mp3Identifier.from_env(
+        acoustid_api_key=acoustid_api_key, policy=policy
+    )
+    tagger = Mp3Tagger()
+    renamer = Mp3Renamer()
 
     summary = {
         "scanned": 0,
@@ -123,7 +135,6 @@ def process_drive_folder_for_retagging(
             continue
 
         temp_path = os.path.join(tempfile.gettempdir(), f"{file_id}_{name}")
-        result = None
 
         try:
             log.info(f"[DOWNLOAD] {name} ({file_id}) -> {temp_path}")
@@ -132,42 +143,51 @@ def process_drive_folder_for_retagging(
 
             # Print existing tags
             log.info("[PRE-EXISTING-TAGS]------------------")
-            _print_all_tags(tool, temp_path)
+            _print_all_tags(tagger, temp_path)
 
-            # Use the local-only pipeline to optionally identify, tag, and rename.
-            result = tool.pipeline.process_file(
-                temp_path,
-                do_identify=True,
-                do_tag=True,
-                do_rename=True,
-                min_confidence=min_confidence,
-            )
+            # Identify
+            id_result = identifier.identify(temp_path, fetch_metadata=True)
+            chosen = id_result.chosen
+            chosen_conf = float(chosen.confidence) if chosen is not None else 0.0
+            identified = chosen is not None and chosen_conf >= float(min_confidence)
 
-            # Always count tag writes when the pipeline reports it.
-            if result.wrote_tags:
+            # Tag + rename only when we have metadata (metadata fetch is policy-gated)
+            path_out = temp_path
+            desired_filename = os.path.basename(temp_path)
+
+            if id_result.metadata:
+                tagger.write(path_out, id_result.metadata, ensure_virtualdj_compat=True)
                 summary["tagged"] += 1
 
-            # Update-in-place scenarios: no candidates / low confidence / identify disabled.
-            if not result.identified:
-                g.drive.update_file(file_id, result.path_out)
+                # Rename in-place (local path only)
+                rename_result = renamer.apply(path_out, metadata=id_result.metadata)
+                path_out = rename_result.dest_path
+                desired_filename = rename_result.dest_name
+
+            if not identified:
+                # Update-in-place scenarios: no candidates or low confidence
+                if chosen is None:
+                    reason = "no_candidates"
+                else:
+                    reason = f"low_confidence:{chosen_conf:.3f}"
+
+                g.drive.update_file(file_id, path_out)
                 summary["uploaded"] += 1
                 log.info(
-                    f"[UPLOAD-SOURCE] Updated in place file_id={file_id} ({name}) reason={result.reason}"
+                    f"[UPLOAD-SOURCE] Updated in place file_id={file_id} ({name}) reason={reason}"
                 )
                 continue
 
-            # Identified with sufficient confidence: upload to destination and delete original.
             summary["identified"] += 1
 
+            # Identified with sufficient confidence: upload to destination and delete original.
             g.drive.upload_file(
-                result.path_out,
+                path_out,
                 parent_id=dest_folder_id,
-                dest_name=result.desired_filename,
+                dest_name=desired_filename,
             )
             summary["uploaded"] += 1
-            log.info(
-                f"[UPLOAD] {result.desired_filename} -> dest_folder_id={dest_folder_id}"
-            )
+            log.info(f"[UPLOAD] {desired_filename} -> dest_folder_id={dest_folder_id}")
 
             g.drive.delete_file(file_id)
             summary["deleted"] += 1
@@ -180,8 +200,11 @@ def process_drive_folder_for_retagging(
             # Best-effort cleanup
             try:
                 paths = {temp_path}
-                if result and getattr(result, "path_out", None):
-                    paths.add(result.path_out)
+                try:
+                    if "path_out" in locals() and path_out and path_out != temp_path:
+                        paths.add(path_out)
+                except Exception:
+                    pass
 
                 for p in paths:
                     if p and os.path.exists(p):
