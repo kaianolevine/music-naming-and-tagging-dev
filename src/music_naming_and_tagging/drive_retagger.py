@@ -64,6 +64,37 @@ def _list_music_files(g: GoogleAPI, folder_id: str) -> list[Any]:
     return files
 
 
+def _format_candidate_summary(candidate: Any) -> str:
+    confidence = getattr(candidate, "confidence", None)
+    confidence_str = f"{confidence:.3f}" if confidence is not None else "N/A"
+    mbid = getattr(candidate, "mbid", "") or getattr(candidate, "recording_id", "")
+    title = getattr(candidate, "title", "") or ""
+    artist = getattr(candidate, "artist", "") or ""
+    parts = []
+    if mbid:
+        parts.append(f"id={mbid}")
+    if title:
+        parts.append(f"title={title}")
+    if artist:
+        parts.append(f"artist={artist}")
+    info = ", ".join(parts)
+    return f"confidence={confidence_str}" + (f", {info}" if info else "")
+
+
+def _format_metadata_summary(metadata: Any) -> str:
+    title = getattr(metadata, "title", "") or ""
+    artist = getattr(metadata, "artist", "") or ""
+    year = getattr(metadata, "year", "") or ""
+    parts = []
+    if title:
+        parts.append(f"title={title}")
+    if artist:
+        parts.append(f"artist={artist}")
+    if year:
+        parts.append(f"year={year}")
+    return ", ".join(parts)
+
+
 def process_drive_folder_for_retagging(
     source_folder_id: str,
     dest_folder_id: str,
@@ -81,7 +112,13 @@ def process_drive_folder_for_retagging(
       - identify via AcoustID -> MusicBrainz recording MBID
       - fetch metadata from MusicBrainz
       - write tags using music-tag (skip conflicting fields, log mismatches)
-      - upload updated file to destination Drive folder
+      - apply local rename based on metadata before upload/update
+      - upload updated file to destination Drive folder or update in place
+
+    Three outcomes:
+      1) No or low-confidence match: update file in place in source folder.
+      2) High-confidence match: upload to destination folder and delete source file.
+      3) Metadata present: tags written and local rename applied before upload or update.
 
     Returns summary:
       {"scanned": int, "downloaded": int, "identified": int, "tagged": int, "uploaded": int, "failed": int}
@@ -145,10 +182,31 @@ def process_drive_folder_for_retagging(
             log.info("[PRE-EXISTING-TAGS]------------------")
             _print_all_tags(tagger, temp_path)
 
+            # Log file info: file_id, name, temp_path, size bytes
+            try:
+                size_bytes = os.path.getsize(temp_path)
+            except Exception:
+                size_bytes = -1
+            log.info(
+                f"[FILE-INFO] file_id={file_id}, name={name}, temp_path={temp_path}, size_bytes={size_bytes}"
+            )
+
             # Identify
             id_result = identifier.identify(temp_path, fetch_metadata=True)
-            chosen = id_result.chosen
-            chosen_conf = float(chosen.confidence) if chosen is not None else 0.0
+
+            # Log identification summary
+            candidates = getattr(id_result, "candidates", [])
+            num_candidates = len(candidates) if candidates else 0
+            chosen = getattr(id_result, "chosen", None)
+            chosen_summary = _format_candidate_summary(chosen) if chosen else "None"
+            metadata_present = bool(getattr(id_result, "metadata", None))
+            log.info(
+                f"[IDENTIFY] candidates={num_candidates}, chosen=({chosen_summary}), metadata_fetched={metadata_present}"
+            )
+
+            chosen_conf = (
+                float(getattr(chosen, "confidence", 0.0)) if chosen is not None else 0.0
+            )
             identified = chosen is not None and chosen_conf >= float(min_confidence)
 
             # Tag + rename only when we have metadata (metadata fetch is policy-gated)
@@ -156,13 +214,21 @@ def process_drive_folder_for_retagging(
             desired_filename = os.path.basename(temp_path)
 
             if id_result.metadata:
+                metadata_summary = _format_metadata_summary(id_result.metadata)
+                log.info(
+                    f"[TAGGING] confidence={chosen_conf:.3f}, metadata=({metadata_summary})"
+                )
                 tagger.write(path_out, id_result.metadata, ensure_virtualdj_compat=True)
+                log.info("[TAGGING-DONE]")
                 summary["tagged"] += 1
 
                 # Rename in-place (local path only)
                 rename_result = renamer.apply(path_out, metadata=id_result.metadata)
+                old_basename = os.path.basename(path_out)
                 path_out = rename_result.dest_path
                 desired_filename = rename_result.dest_name
+                new_basename = os.path.basename(path_out)
+                log.info(f"[RENAME] {old_basename} -> {new_basename}")
 
             if not identified:
                 # Update-in-place scenarios: no candidates or low confidence
@@ -171,6 +237,9 @@ def process_drive_folder_for_retagging(
                 else:
                     reason = f"low_confidence:{chosen_conf:.3f}"
 
+                log.info(
+                    f"[DECISION] update_in_place reason={reason} chosen_conf={chosen_conf:.3f}"
+                )
                 g.drive.update_file(file_id, path_out)
                 summary["uploaded"] += 1
                 log.info(
@@ -181,6 +250,9 @@ def process_drive_folder_for_retagging(
             summary["identified"] += 1
 
             # Identified with sufficient confidence: upload to destination and delete original.
+            log.info(
+                f"[DECISION] move_to_dest chosen_conf={chosen_conf:.3f} dest_folder_id={dest_folder_id}"
+            )
             g.drive.upload_file(
                 path_out,
                 parent_id=dest_folder_id,
@@ -195,7 +267,7 @@ def process_drive_folder_for_retagging(
 
         except Exception as e:
             summary["failed"] += 1
-            log.error(f"[ERROR] {name} ({file_id}): {e}")
+            log.error(f"[ERROR] {name} ({file_id}): {e}", exc_info=True)
         finally:
             # Best-effort cleanup
             try:

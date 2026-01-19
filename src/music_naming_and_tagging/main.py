@@ -15,7 +15,7 @@ def main() -> None:
     """
 
     source_folder_id = "1hDFTDOavXDtJN-MR-ruqqapMaXGp4mB6"
-    dest_folder_id = "1fL4Q4S1WUefC1QhHIsLuj3_DU1ZZBm_4"
+    dest_folder_id = source_folder_id  # "1fL4Q4S1WUefC1QhHIsLuj3_DU1ZZBm_4"
     acoustid_api_key = "R1yQzNHear"
     if not source_folder_id or not dest_folder_id or not acoustid_api_key:
         raise RuntimeError(
