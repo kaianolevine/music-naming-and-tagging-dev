@@ -220,6 +220,7 @@ def process_drive_folder_for_retagging(
                 )
                 tagger.write(path_out, id_result.metadata, ensure_virtualdj_compat=True)
                 log.info("[TAGGING-DONE]")
+                _print_all_tags(tagger, temp_path)
                 summary["tagged"] += 1
 
                 # Rename in-place (local path only)
