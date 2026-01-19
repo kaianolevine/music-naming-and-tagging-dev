@@ -182,15 +182,6 @@ def process_drive_folder_for_retagging(
             log.info("[PRE-EXISTING-TAGS]------------------")
             _print_all_tags(tagger, temp_path)
 
-            # Log file info: file_id, name, temp_path, size bytes
-            try:
-                size_bytes = os.path.getsize(temp_path)
-            except Exception:
-                size_bytes = -1
-            log.info(
-                f"[FILE-INFO] file_id={file_id}, name={name}, temp_path={temp_path}, size_bytes={size_bytes}"
-            )
-
             # Identify
             id_result = identifier.identify(temp_path, fetch_metadata=True)
 
