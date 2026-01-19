@@ -29,11 +29,14 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: 🎧 Install system deps (chromaprint)
+      - name: 🎧 Install system deps (ffmpeg + chromaprint)
         run: |
           sudo apt-get update -y
-          sudo apt-get install -y --no-install-recommends libchromaprint-tools
-          fpcalc -version
+          sudo apt-get install -y --no-install-recommends ffmpeg libchromaprint-tools
+          echo "ffmpeg: $(ffmpeg -version | head -n 1)"
+          echo "fpcalc: $(fpcalc -version || true)"
+          which ffmpeg
+          which fpcalc
 
       - name: 📦 Install Poetry
         run: pip install poetry
